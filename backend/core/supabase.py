@@ -1,7 +1,3 @@
-"""
-Supabase client for the backend. Uses the service_role key (server-side only).
-Never expose this key to the frontend.
-"""
 import os
 from supabase import create_client
 
