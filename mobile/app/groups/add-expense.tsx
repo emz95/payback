@@ -175,7 +175,7 @@ export default function AddExpenseScreen() {
 
           {/* Submit Button */}
           {splitOption === 'equally' ? (
-            <TouchableOpacity style={styles.button} onPress={() => console.log('add expense')}>
+            <TouchableOpacity style={styles.button} onPress={() => router.back()}>
               <Text style={styles.buttonText}>
                 Add Expense{perPerson ? `  ·  $${perPerson} each` : ''}
               </Text>
@@ -185,7 +185,7 @@ export default function AddExpenseScreen() {
                 style={[styles.continueButton, continuePressed && { backgroundColor: '#3b5e4f' }]}
                 onPressIn={() => setContinuePressed(true)}
                 onPressOut={() => setContinuePressed(false)}
-                onPress={() => console.log('go to manual split')}
+                onPress={() => router.push('/groups/manual-split')}
 >
   <Text style={styles.buttonText}>Continue</Text>
 </TouchableOpacity>
