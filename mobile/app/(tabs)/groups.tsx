@@ -1,36 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform
+  StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
 
-const groups = [
-  {
-    id: '1',
-    name: 'Tokyo Trip 2026',
-    date: 'Mar 15 – Mar 22',
-    members: ['🐱', '🐰', '🐶'],
-    amount: 145.50,
-    owesYou: true,
-  },
-  {
-    id: '2',
-    name: 'Weekly Dinners',
-    date: 'Ongoing',
-    members: ['🐱', '🐦', '🐟'],
-    amount: 15.25,
-    owesYou: false,
-  },
-  {
-    id: '3',
-    name: 'SF Weekend',
-    date: 'Feb 10 – Feb 12',
-    members: ['🐱', '🐰', '🐦'],
-    amount: 67.00,
-    owesYou: true,
-  },
-];
+import { getGroups, type ApiGroup } from '@/lib/api';
+
+function formatDateRange(start: string, end: string): string {
+  try {
+    const s = new Date(start);
+    const e = new Date(end);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return start;
+    return `${s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${e.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  } catch {
+    return `${start} – ${end}`;
+  }
+}
 
 const FRIENDS = ['sarah_kim', 'mike_chen', 'emma_j', 'alex_wu'];
 
@@ -41,6 +27,9 @@ export default function GroupsScreen() {
   const [endDate, setEndDate] = useState('');
   const [friendSearch, setFriendSearch] = useState('');
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+  const [groups, setGroups] = useState<ApiGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const filteredFriends = FRIENDS.filter(
     (f) =>
@@ -63,48 +52,66 @@ export default function GroupsScreen() {
     setModalVisible(false);
   };
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await getGroups();
+        setGroups(data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to load groups';
+        if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
+          router.replace('/');
+          return;
+        }
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Header */}
         <View style={styles.headerCard}>
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Groups & Trips</Text>
           </View>
         </View>
 
-        {/* Group Cards */}
-        <View style={styles.groupsList}>
-          {groups.map((group) => (
-            <TouchableOpacity
-              key={group.id}
-              style={styles.groupCard}
-              onPress={() => router.push(`/groups/${group.id}`)}
-            >
-              <View style={styles.cardTop}>
-                <View style={styles.cardLeft}>
-                  <Text style={styles.groupName}>{group.name}</Text>
-                  <Text style={styles.groupDate}>{group.date}</Text>
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#3b5e4f" />
+          </View>
+        ) : error ? (
+          <View style={styles.centered}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <View style={styles.groupsList}>
+            {groups.map((group) => (
+              <TouchableOpacity
+                key={group.id}
+                style={styles.groupCard}
+                onPress={() => router.push(`/groups/${group.id}`)}
+              >
+                <View style={styles.cardTop}>
+                  <View style={styles.cardLeft}>
+                    <Text style={styles.groupName}>{group.name}</Text>
+                    <Text style={styles.groupDate}>
+                      {formatDateRange(group.start_date, group.end_date)}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={[styles.groupAmount, group.owesYou ? styles.positive : styles.negative]}>
-                  {group.owesYou ? '+' : ''}${group.amount.toFixed(2)}
-                </Text>
-              </View>
 
-              <View style={styles.cardBottom}>
-                <Text style={styles.membersIcon}>👥</Text>
-                <View style={styles.avatarRow}>
-                  {group.members.map((icon, i) => (
-                    <View key={i} style={[styles.avatarCircle, { marginLeft: i === 0 ? 0 : -10 }]}>
-                      <Text style={styles.avatarEmoji}>{icon}</Text>
-                    </View>
-                  ))}
+                <View style={styles.cardBottom}>
+                  <Text style={styles.membersIcon}>👥</Text>
+                  <Text style={styles.memberCount}>View details</Text>
                 </View>
-                <Text style={styles.memberCount}>{group.members.length} members</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       {/* Floating Add Button */}
@@ -285,6 +292,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  centered: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    textAlign: 'center',
+  },
+  // Groups List
   groupsList: {
     paddingHorizontal: 16,
     gap: 12,

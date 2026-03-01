@@ -53,3 +53,27 @@ export async function getHello(name: string = 'friend'): Promise<ApiHello> {
   if (!res.ok) throw new Error(`API error ${res.status}`);
   return res.json();
 }
+
+export type ApiGroup = {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  created_by: string;
+  created_at?: string;
+};
+
+export async function getGroups(): Promise<ApiGroup[]> {
+  const res = await fetchWithAuth('/groups');
+  if (!res.ok) {
+    let msg = `Groups failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) msg += ` — ${body.detail}`;
+    } catch {
+      // ignore if body isn't JSON
+    }
+    throw new Error(msg);
+  }
+  return res.json();
+}
