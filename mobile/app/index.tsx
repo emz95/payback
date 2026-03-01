@@ -31,11 +31,11 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Log In</Text>
         </TouchableOpacity>
         <Text style={styles.signupText}>
-          Don't have an account?{' '}
-          <Text style={styles.signupLink} onPress={() => router.push('/signup')}>
-            Sign up
-          </Text>
+            Don't have an account?{' '}
         </Text>
+        <TouchableOpacity onPress={() => router.push('/signup')}>
+            <Text style={styles.signupLink}>Sign up</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
