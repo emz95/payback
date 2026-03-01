@@ -1,22 +1,14 @@
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-
-/** Your computer's IP — used when the app runs on a physical device (same Wi‑Fi). */
-const DEVICE_API_URL = 'http://172.22.198.32:8000';
 
 /**
  * Backend API base URL.
- * - Physical device: DEVICE_API_URL (your Mac's IP — phone and Mac must be on same Wi‑Fi).
- * - Android Emulator: 10.0.2.2
- * - iOS Simulator / web: localhost
+ * Set EXPO_PUBLIC_API_URL in .env to your computer's IP (e.g. http://192.168.1.5:8000)
+ * so the app on a physical device can reach the backend. Restart Expo after changing .env.
  */
 function getBaseUrl(): string {
-  if (Constants.isDevice && Platform.OS !== 'web') {
-    return DEVICE_API_URL;
-  }
-  if (__DEV__ && Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000';
-  }
+  const env = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (env) return env.replace(/\/$/, '');
+  if (__DEV__ && Platform.OS === 'android') return 'http://10.0.2.2:8000';
   return 'http://localhost:8000';
 }
 
