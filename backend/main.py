@@ -1,9 +1,14 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from routers import health
+
 app = FastAPI()
 
-# Allow Expo app to talk to backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # dev only
@@ -12,10 +17,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def root():
-    return {"message": "API is running 🚀"}
-
-@app.get("/hello")
-def hello(name: str = "friend"):
-    return {"message": f"Hello {name} from FastAPI!"}
+app.include_router(health.router)
