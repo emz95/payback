@@ -34,7 +34,9 @@ export default function GroupsScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         {/* Header */}
         <View style={styles.headerCard}>
-          <Text style={styles.headerTitle}>Groups & Trips</Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>Groups & Trips</Text>
+          </View>
         </View>
 
         {/* Group Cards */}
@@ -87,8 +89,6 @@ const styles = StyleSheet.create({
   container: {
     paddingBottom: 100,
   },
-
-  // Header
   headerCard: {
     backgroundColor: '#3b5e4f',
     borderRadius: 20,
@@ -96,14 +96,17 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 32,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   headerTitle: {
     color: '#fff',
     fontSize: 26,
     fontFamily: 'serif',
     fontWeight: '600',
   },
-
-  // Groups List
   groupsList: {
     paddingHorizontal: 16,
     gap: 12,
@@ -169,8 +172,6 @@ const styles = StyleSheet.create({
     color: '#888',
     marginLeft: 4,
   },
-
-  // FAB
   fab: {
     position: 'absolute',
     bottom: 30,
@@ -193,8 +194,6 @@ const styles = StyleSheet.create({
     color: '#e8a0a0',
     lineHeight: 32,
   },
-
-  // Shared
   positive: { color: '#3daa6e' },
   negative: { color: '#e07070' },
 });
