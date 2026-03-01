@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
 
+import { supabase } from '@/lib/supabase';
+
 /**
  * Backend API base URL.
  * Set EXPO_PUBLIC_API_URL in .env to your computer's IP (e.g. http://192.168.1.5:8000)
@@ -13,6 +15,28 @@ function getBaseUrl(): string {
 }
 
 const BASE_URL = getBaseUrl();
+
+/** Get current Supabase access token for backend auth. */
+export async function getAccessToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+/** Fetch from backend with Authorization: Bearer <token>. Use for protected routes. */
+export async function fetchWithAuth(
+  path: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const token = await getAccessToken();
+  const headers: HeadersInit = {
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return fetch(`${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
+    ...options,
+    headers,
+  });
+}
 
 export type ApiRoot = { message: string };
 export type ApiHello = { message: string };

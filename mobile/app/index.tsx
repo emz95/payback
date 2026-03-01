@@ -1,18 +1,71 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 
+import { signIn } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
+
 export default function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/(tabs)/home');
+        return;
+      }
+      setCheckingSession(false);
+    })();
+  }, []);
+
+  if (checkingSession) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#3b5e4f" />
+      </View>
+    );
+  }
+
+  async function handleLogin() {
+    setError('');
+    if (!email.trim() || !password) {
+      setError('Please enter email and password');
+      return;
+    }
+    setLoading(true);
+    try {
+      await signIn(email.trim(), password);
+      router.replace('/(tabs)/home');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Login failed';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Payback</Text>
       <Text style={styles.subtitle}>Track expenses with friends</Text>
 
       <View style={styles.form}>
-        <Text style={styles.label}>Username</Text>
+        <Text style={styles.label}>Email</Text>
         <TextInput
           style={styles.input}
-          placeholder="Enter username"
+          placeholder="Enter email"
           placeholderTextColor="#aaa"
+          value={email}
+          onChangeText={(t) => { setEmail(t); setError(''); }}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          editable={!loading}
         />
 
         <Text style={styles.label}>Password</Text>
@@ -21,21 +74,34 @@ export default function LoginScreen() {
           placeholder="Enter password"
           placeholderTextColor="#aaa"
           secureTextEntry
+          value={password}
+          onChangeText={(t) => { setPassword(t); setError(''); }}
+          editable={!loading}
         />
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <TouchableOpacity>
           <Text style={styles.forgot}>Forgot password?</Text>
         </TouchableOpacity>
 
-       <TouchableOpacity style={styles.button} onPress={() => router.replace('/(tabs)/home')}>
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
             <Text style={styles.buttonText}>Log In</Text>
+          )}
         </TouchableOpacity>
-        <Text style={styles.signupText}>
-            Don't have an account?{' '}
-        </Text>
-        <TouchableOpacity onPress={() => router.push('/signup')}>
+        <View style={styles.signupRow}>
+          <Text style={styles.signupText}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => router.push('/signup')} disabled={loading}>
             <Text style={styles.signupLink}>Sign up</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -48,6 +114,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 100,
     paddingHorizontal: 30,
+  },
+  centered: {
+    justifyContent: 'center',
   },
   title: {
     fontSize: 40,
@@ -78,6 +147,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
   },
+  errorText: {
+    color: '#c62828',
+    fontFamily: 'monospace',
+    marginBottom: 12,
+    fontSize: 14,
+  },
   forgot: {
     color: '#e8a0a0',
     textAlign: 'center',
@@ -91,16 +166,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
   buttonText: {
     color: '#fff',
     fontSize: 16,
   },
+  signupRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+  },
   signupText: {
-    textAlign: 'center',
     fontFamily: 'monospace',
     color: '#333',
   },
   signupLink: {
     color: '#e8a0a0',
+    fontFamily: 'monospace',
   },
 });

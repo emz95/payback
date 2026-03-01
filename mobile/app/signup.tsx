@@ -1,11 +1,66 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
+
+import { signUpWithUsername } from '@/lib/auth';
 
 const PROFILE_ICONS = ['🐱', '🐰', '🐶', '🐦', '🐟', '🐿️'];
 
 export default function SignupScreen() {
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [selectedIcon, setSelectedIcon] = useState(0);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSignup() {
+    setError('');
+    if (!email.trim()) {
+      setError('Enter your email');
+      return;
+    }
+    if (!username.trim()) {
+      setError('Choose a username');
+      return;
+    }
+    if (!password) {
+      setError('Enter a password');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await signUpWithUsername({
+        email: email.trim(),
+        password,
+        username: username.trim(),
+      });
+
+      router.replace('/(tabs)/home');
+    } catch (e: unknown) {
+      const err = e as { message?: string; error_description?: string; details?: string };
+      const message =
+        err?.message ||
+        err?.error_description ||
+        err?.details ||
+        (e instanceof Error ? e.message : null) ||
+        'Sign up failed';
+      setError(message);
+      if (__DEV__) console.error('Signup error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -20,6 +75,9 @@ export default function SignupScreen() {
           placeholderTextColor="#aaa"
           keyboardType="email-address"
           autoCapitalize="none"
+          value={email}
+          onChangeText={(t) => { setEmail(t); setError(''); }}
+          editable={!loading}
         />
 
         <Text style={styles.label}>Username</Text>
@@ -28,6 +86,9 @@ export default function SignupScreen() {
           placeholder="cooluser123"
           placeholderTextColor="#aaa"
           autoCapitalize="none"
+          value={username}
+          onChangeText={(t) => { setUsername(t); setError(''); }}
+          editable={!loading}
         />
 
         <Text style={styles.label}>Password</Text>
@@ -36,6 +97,9 @@ export default function SignupScreen() {
           placeholder="········"
           placeholderTextColor="#aaa"
           secureTextEntry
+          value={password}
+          onChangeText={(t) => { setPassword(t); setError(''); }}
+          editable={!loading}
         />
 
         <Text style={styles.label}>Confirm Password</Text>
@@ -44,7 +108,12 @@ export default function SignupScreen() {
           placeholder="········"
           placeholderTextColor="#aaa"
           secureTextEntry
+          value={confirmPassword}
+          onChangeText={(t) => { setConfirmPassword(t); setError(''); }}
+          editable={!loading}
         />
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <Text style={styles.label}>Choose Your Profile Icon</Text>
         <View style={styles.iconRow}>
@@ -53,6 +122,7 @@ export default function SignupScreen() {
               key={index}
               style={[styles.iconButton, selectedIcon === index && styles.iconButtonSelected]}
               onPress={() => setSelectedIcon(index)}
+              disabled={loading}
             >
               <Text style={styles.iconText}>{icon}</Text>
               {selectedIcon === index && (
@@ -65,15 +135,20 @@ export default function SignupScreen() {
         </View>
 
         <TouchableOpacity
-          style={styles.button}
-          onPress={() => router.replace('/(tabs)/home')}
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleSignup}
+          disabled={loading}
         >
-          <Text style={styles.buttonText}>Create Account</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Create Account</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.loginRow}>
           <Text style={styles.loginText}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => router.push('/')}>
+          <TouchableOpacity onPress={() => router.push('/')} disabled={loading}>
             <Text style={styles.loginLink}>Log in</Text>
           </TouchableOpacity>
         </View>
@@ -120,6 +195,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
   },
+  errorText: {
+    color: '#c62828',
+    fontFamily: 'monospace',
+    marginBottom: 12,
+    fontSize: 14,
+  },
   iconRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -164,6 +245,9 @@ const styles = StyleSheet.create({
     padding: 18,
     alignItems: 'center',
     marginBottom: 20,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',
