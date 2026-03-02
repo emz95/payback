@@ -122,7 +122,7 @@ export default function HomeScreen() {
           {friends.map((friend) => {
             const cents = friendBalances[friend.id] ?? 0;
             const balanceText =
-              cents === 0 ? 'Settled' : cents > 0 ? `+$${(cents / 100).toFixed(2)}` : `-$${(Math.abs(cents) / 100).toFixed(2)}`;
+              cents === 0 ? '$0.00' : cents > 0 ? `+$${(cents / 100).toFixed(2)}` : `-$${(Math.abs(cents) / 100).toFixed(2)}`;
             const balancePositive = cents > 0;
             const balanceNegative = cents < 0;
             return (

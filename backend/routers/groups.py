@@ -153,37 +153,6 @@ def get_balances_by_following(user_id: UUID = Depends(get_user_id)):
     return result
 
 
-@router.get("/{group_id}")
-def get_group(
-    group_id: UUID,
-    user_id: UUID = Depends(get_user_id),
-):
-    """Get one group by id. User must be creator or in group_members."""
-    result = (
-        supabase.table("groups")
-        .select("*")
-        .eq("id", str(group_id))
-        .execute()
-    )
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Group not found")
-    group = result.data[0]
-
-    # Check access: creator or member
-    if group["created_by"] == str(user_id):
-        return group
-    member = (
-        supabase.table("group_members")
-        .select("user_id")
-        .eq("group_id", str(group_id))
-        .eq("user_id", str(user_id))
-        .execute()
-    )
-    if not member.data:
-        raise HTTPException(status_code=404, detail="Group not found")
-    return group
-
-
 @router.get("/{group_id}/members")
 def get_group_members(
     group_id: UUID,
@@ -253,6 +222,37 @@ def get_group_balance(
             balance_cents -= my_share
 
     return {"balance_cents": balance_cents}
+
+
+@router.get("/{group_id}")
+def get_group(
+    group_id: UUID,
+    user_id: UUID = Depends(get_user_id),
+):
+    """Get one group by id. User must be creator or in group_members."""
+    result = (
+        supabase.table("groups")
+        .select("*")
+        .eq("id", str(group_id))
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Group not found")
+    group = result.data[0]
+
+    # Check access: creator or member
+    if group["created_by"] == str(user_id):
+        return group
+    member = (
+        supabase.table("group_members")
+        .select("user_id")
+        .eq("group_id", str(group_id))
+        .eq("user_id", str(user_id))
+        .execute()
+    )
+    if not member.data:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return group
 
 
 @router.post("", status_code=201)
