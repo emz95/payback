@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform
+  StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
 
@@ -31,15 +31,14 @@ function formatDateRange(start: string, end: string): string {
 }
 
 export default function GroupsScreen() {
-  const [groups, setGroups] = useState<ApiGroup[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [modalVisible, setModalVisible] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [friendSearch, setFriendSearch] = useState('');
+  const [groups, setGroups] = useState<ApiGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [following, setFollowing] = useState<ApiProfile[]>([]);
   const [followingLoaded, setFollowingLoaded] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<ApiProfile[]>([]);
@@ -121,6 +120,10 @@ export default function GroupsScreen() {
         setGroups(data);
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to load groups';
+        if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
+          router.replace('/');
+          return;
+        }
         setError(msg);
       } finally {
         setLoading(false);
@@ -311,11 +314,9 @@ export default function GroupsScreen() {
                 disabled={!groupName.trim() || createLoading}
                 onPress={handleCreateGroup}
               >
-                {createLoading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.createButtonText}>Create Group</Text>
-                )}
+                <Text style={styles.createButtonText}>
+                  {createLoading ? 'Creating…' : 'Create Group'}
+                </Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -351,16 +352,6 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     fontWeight: '600',
   },
-  centered: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorText: {
-    fontFamily: 'monospace',
-    color: '#c62828',
-    textAlign: 'center',
-  },
   addFriendsButton: {
     backgroundColor: '#e8a0a0',
     borderRadius: 20,
@@ -373,6 +364,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  centered: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    textAlign: 'center',
+  },
+  // Groups List
   groupsList: {
     paddingHorizontal: 16,
     gap: 12,

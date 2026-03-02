@@ -9,7 +9,7 @@ from models.group import GroupCreate
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 
-@router.get("")
+@router.get("/")
 def list_my_groups(user_id: UUID = Depends(get_user_id)):
     memberships = (
         supabase.table("group_members")
@@ -108,13 +108,10 @@ def create_group(
     group: GroupCreate,
     user_id: UUID = Depends(get_user_id),
 ):
-    from datetime import date as date_type
-    start = group.start_date if group.start_date is not None else date_type.today()
-    end = group.end_date if group.end_date is not None else date_type.today()
     row = {
         "name": group.name,
-        "start_date": start.isoformat(),
-        "end_date": end.isoformat(),
+        "start_date": group.start_date.isoformat(),
+        "end_date": group.end_date.isoformat(),
         "created_by": str(user_id),
     }
     result = supabase.table("groups").insert(row).execute()
@@ -132,3 +129,5 @@ def create_group(
         }).execute()
 
     return created
+
+
