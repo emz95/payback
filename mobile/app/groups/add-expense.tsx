@@ -19,13 +19,25 @@ const CATEGORIES = [
 
 type MemberOption = { id: string; label: string };
 
+function getParam(params: Record<string, string | string[] | undefined>, key: string): string {
+  const v = params[key];
+  return typeof v === 'string' ? v : Array.isArray(v) ? v[0] ?? '' : '';
+}
+
 export default function AddExpenseScreen() {
-  const params = useLocalSearchParams<{ group_id?: string }>();
+  const params = useLocalSearchParams<{
+    group_id?: string;
+    title?: string;
+    amount?: string;
+    subtotal?: string;
+    tax?: string;
+    tip?: string;
+  }>();
   const groupId = typeof params.group_id === 'string' ? params.group_id : params.group_id?.[0];
 
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(() => getParam(params, 'title'));
   const [notes, setNotes] = useState('');
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(() => getParam(params, 'amount'));
   const [selectedCategory, setCategory] = useState(CATEGORIES[0]);
   const [showCategoryDrop, setShowCategoryDrop] = useState(false);
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);

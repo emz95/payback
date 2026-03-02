@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 
 import { getGroup, getExpensesForGroup, type ApiGroup, type ApiExpense } from '@/lib/api';
 
@@ -22,7 +23,6 @@ export default function GroupDetailScreen() {
   const [expenses, setExpenses] = useState<ApiExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     if (!id) return;
     (async () => {
@@ -42,6 +42,39 @@ export default function GroupDetailScreen() {
       }
     })();
   }, [id]);
+
+  const handleScanReceipt = () => {
+    Alert.alert('Scan Receipt', 'Choose an option', [
+      { text: 'Take Photo', onPress: () => pickImage('camera') },
+      { text: 'Choose from Library', onPress: () => pickImage('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const pickImage = async (source: 'camera' | 'library') => {
+    if (source === 'camera') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Camera permission is required.');
+        return;
+      }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Photo library permission is required.');
+        return;
+      }
+    }
+    const result =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (result.canceled) return;
+    // Receipt image captured; not sent to backend yet. Go to add-expense to enter manually.
+    if (id) {
+      router.push({ pathname: '/groups/add-expense', params: { group_id: id } });
+    }
+  };
 
   if (loading) {
     return (
@@ -117,15 +150,15 @@ export default function GroupDetailScreen() {
       </ScrollView>
 
       {/* FABs */}
-      <TouchableOpacity style={styles.fabCamera} onPress={() => console.log('scan receipt')}>
+      <TouchableOpacity style={styles.fabCamera} onPress={handleScanReceipt}>
         <Text style={styles.fabIcon}>📷</Text>
       </TouchableOpacity>
-      <TouchableOpacity
+    <TouchableOpacity
         style={styles.fabAdd}
         onPress={() => router.push(`/groups/add-expense?group_id=${id}`)}
       >
         <Text style={styles.fabPlusIcon}>+</Text>
-      </TouchableOpacity>
+    </TouchableOpacity>
     </View>
   );
 }
