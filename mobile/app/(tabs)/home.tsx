@@ -129,6 +129,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={friend.id}
                 style={styles.friendCard}
+                onPress={() => router.push(`/friends/${friend.id}`)}
               >
                 <View style={styles.friendLeft}>
                   <View style={styles.avatarCircle}>
