@@ -47,15 +47,24 @@ def list_my_groups(user_id: UUID = Depends(get_user_id)):
 @router.get("/balance/total")
 def get_total_balance(user_id: UUID = Depends(get_user_id)):
     """Current user's balance across all groups in cents. Positive = you are owed, negative = you owe."""
+    me = str(user_id)
     member_rows = (
         supabase.table("group_members")
         .select("group_id")
-        .eq("user_id", str(user_id))
+        .eq("user_id", me)
         .execute()
     )
-    group_ids = list({r["group_id"] for r in (member_rows.data or [])})
+    group_ids = set(r["group_id"] for r in (member_rows.data or []))
+    created = (
+        supabase.table("groups")
+        .select("id")
+        .eq("created_by", me)
+        .execute()
+    )
+    for row in (created.data or []):
+        group_ids.add(row["id"])
+    group_ids = list(group_ids)
     total_cents = 0
-    me = str(user_id)
     for group_id in group_ids:
         expenses = (
             supabase.table("expenses")
