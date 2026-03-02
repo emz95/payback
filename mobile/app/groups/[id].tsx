@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
-import { getGroup, getExpensesForGroup, type ApiGroup, type ApiExpense } from '@/lib/api';
+import { getGroup, getExpensesForGroup, getGroupBalance, type ApiGroup, type ApiExpense } from '@/lib/api';
 
 function formatDateRange(start: string, end: string): string {
   try {
@@ -20,28 +21,47 @@ export default function GroupDetailScreen() {
   const id = typeof params.id === 'string' ? params.id : params.id?.[0];
   const [group, setGroup] = useState<ApiGroup | null>(null);
   const [expenses, setExpenses] = useState<ApiExpense[]>([]);
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!id) return;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [groupData, expensesData] = await Promise.all([
-          getGroup(id),
-          getExpensesForGroup(id),
-        ]);
-        setGroup(groupData);
-        setExpenses(expensesData);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load group');
-      } finally {
-        setLoading(false);
-      }
-    })();
+    setLoading(true);
+    setError(null);
+    try {
+      const [groupData, expensesData, balanceData] = await Promise.all([
+        getGroup(id),
+        getExpensesForGroup(id),
+        getGroupBalance(id),
+      ]);
+      setGroup(groupData);
+      setExpenses(expensesData);
+      setBalanceCents(balanceData.balance_cents);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load group');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Refetch when screen comes back into focus (e.g. after adding an expense)
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      Promise.all([
+        getExpensesForGroup(id),
+        getGroupBalance(id),
+      ]).then(([expensesData, balanceData]) => {
+        setExpenses(expensesData);
+        setBalanceCents(balanceData.balance_cents);
+      }).catch(() => {});
+    }, [id])
+  );
 
   if (loading) {
     return (
@@ -63,6 +83,16 @@ export default function GroupDetailScreen() {
   }
 
   const dateRange = formatDateRange(group.start_date, group.end_date);
+  const balanceText =
+    balanceCents === null
+      ? '—'
+      : balanceCents === 0
+        ? '$0.00'
+        : balanceCents > 0
+          ? `+$${(balanceCents / 100).toFixed(2)}`
+          : `-$${(Math.abs(balanceCents) / 100).toFixed(2)}`;
+  const balancePositive = balanceCents != null && balanceCents > 0;
+  const balanceNegative = balanceCents != null && balanceCents < 0;
 
   return (
     <View style={styles.screen}>
@@ -78,7 +108,15 @@ export default function GroupDetailScreen() {
 
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Your Balance</Text>
-            <Text style={styles.balanceAmount}>—</Text>
+            <Text
+              style={[
+                styles.balanceAmount,
+                balancePositive && styles.balancePositive,
+                balanceNegative && styles.balanceNegative,
+              ]}
+            >
+              {balanceText}
+            </Text>
           </View>
         </View>
 
@@ -98,7 +136,9 @@ export default function GroupDetailScreen() {
                     <View style={styles.dot} />
                     <View>
                       <Text style={styles.expenseTitle}>{expense.title}</Text>
-                      <Text style={styles.expensePaidBy}>Paid by {expense.paid_by}</Text>
+                      <Text style={styles.expensePaidBy}>
+                        Paid by {expense.paid_by_username ?? expense.paid_by}
+                      </Text>
                       {expense.category && (
                         <Text style={styles.expenseDate}>{expense.category}</Text>
                       )}
@@ -193,6 +233,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#1a1a1a',
+  },
+  balancePositive: {
+    color: '#2e7d32',
+  },
+  balanceNegative: {
+    color: '#c62828',
   },
 
   // Expenses

@@ -34,6 +34,7 @@ export default function AddExpenseScreen() {
   const [paidById, setPaidById] = useState<string | null>(null);
   const [showPaidByDrop, setShowPaidByDrop] = useState(false);
   const [splitOption, setSplitOption] = useState<'equally' | 'manually'>('equally');
+  const [step, setStep] = useState<1 | 2>(1);
   const [continuePressed, setContinuePressed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -98,7 +99,7 @@ export default function AddExpenseScreen() {
         paid_by: paidById,
         split_mode: 'equal',
       });
-      await splitExpenseEqual(expense.id);
+      await splitExpenseEqual(expense.id, selectedMemberIds);
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to add expense');
@@ -125,7 +126,14 @@ export default function AddExpenseScreen() {
         split_mode: 'manual',
       });
       setSubmitLoading(false);
-      router.push(`/groups/manual-split?expense_id=${expense.id}&group_id=${groupId}`);
+      const query = new URLSearchParams({
+        expense_id: expense.id,
+        group_id: groupId,
+        member_ids: selectedMemberIds.join(','),
+        total_cents: String(expense.amount_cents),
+        title: title.trim(),
+      });
+      router.push(`/groups/manual-split?${query.toString()}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to add expense');
       setSubmitLoading(false);
@@ -139,6 +147,13 @@ export default function AddExpenseScreen() {
       </View>
     );
   }
+
+  const canGoNext =
+    title.trim().length > 0 &&
+    !isNaN(parseFloat(amount)) &&
+    parseFloat(amount) > 0 &&
+    selectedMemberIds.length > 0 &&
+    paidById != null;
 
   if (error && !groupId) {
     return (
@@ -156,10 +171,16 @@ export default function AddExpenseScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         {/* Header */}
         <View style={styles.headerCard}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => (step === 1 ? router.back() : setStep(1))}
+            style={styles.backButton}
+          >
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Add Expense</Text>
+          {step === 2 ? (
+            <Text style={styles.headerStep}>Step 2 of 2</Text>
+          ) : null}
         </View>
 
         {error ? <Text style={styles.formError}>{error}</Text> : null}
@@ -179,7 +200,8 @@ export default function AddExpenseScreen() {
           <Text style={styles.label}>Category</Text>
           <TouchableOpacity
             style={styles.dropdown}
-            onPress={() => setShowCategoryDrop(!showCategoryDrop)}
+            onPress={() => { setShowPaidByDrop(false); setShowCategoryDrop((v) => !v); }}
+            activeOpacity={0.7}
           >
             <View style={styles.dropdownLeft}>
               <View style={[styles.dot, { backgroundColor: selectedCategory.color }]} />
@@ -188,7 +210,7 @@ export default function AddExpenseScreen() {
             <Text style={styles.chevron}>⌄</Text>
           </TouchableOpacity>
           {showCategoryDrop && (
-            <View style={styles.dropdownMenu}>
+            <View style={styles.dropdownMenuRaised}>
               {CATEGORIES.map((cat) => (
                 <TouchableOpacity
                   key={cat.label}
@@ -225,101 +247,131 @@ export default function AddExpenseScreen() {
             keyboardType="decimal-pad"
           />
 
-          {/* Split Between */}
+          {/* Paid By — dropdown first (wrapped so menu draws above Split Between) */}
+          <View style={styles.dropdownSection}>
+            <Text style={styles.label}>Paid By</Text>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => {
+                setShowCategoryDrop(false);
+                setShowPaidByDrop((v) => !v);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dropdownText}>{paidByLabel}</Text>
+              <Text style={styles.chevron}>{showPaidByDrop ? '⌃' : '⌄'}</Text>
+            </TouchableOpacity>
+            {showPaidByDrop && (
+              <View style={styles.dropdownMenuRaised}>
+                {memberOptions.length === 0 ? (
+                  <Text style={styles.dropdownEmpty}>No members in this group</Text>
+                ) : (
+                  memberOptions.map((member) => (
+                    <TouchableOpacity
+                      key={member.id}
+                      style={styles.dropdownItem}
+                      onPress={() => { setPaidById(member.id); setShowPaidByDrop(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.dropdownText}>{member.label}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* Split Between — list of members to split among */}
           <Text style={styles.label}>Split Between</Text>
           <View style={styles.checkboxGroup}>
-            {memberOptions.map((member) => (
-              <TouchableOpacity
-                key={member.id}
-                style={styles.checkboxRow}
-                onPress={() => toggleMember(member.id)}
-              >
-                <View style={[styles.checkbox, selectedMemberIds.includes(member.id) && styles.checkboxChecked]}>
-                  {selectedMemberIds.includes(member.id) && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-                <Text style={styles.checkboxLabel}>{member.label}</Text>
-              </TouchableOpacity>
-            ))}
-            <Text style={styles.selectedCount}>Selected: {selectedMemberIds.length} people</Text>
+            {memberOptions.length === 0 ? (
+              <Text style={styles.selectedCount}>No members in this group. Add members to the group first.</Text>
+            ) : (
+              <>
+                {memberOptions.map((member) => (
+                  <TouchableOpacity
+                    key={member.id}
+                    style={styles.checkboxRow}
+                    onPress={() => toggleMember(member.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkbox, selectedMemberIds.includes(member.id) && styles.checkboxChecked]}>
+                      {selectedMemberIds.includes(member.id) && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                    <Text style={styles.checkboxLabel}>{member.label}</Text>
+                  </TouchableOpacity>
+                ))}
+                <Text style={styles.selectedCount}>Selected: {selectedMemberIds.length} people</Text>
+              </>
+            )}
           </View>
 
-          {/* Paid By */}
-          <Text style={styles.label}>Paid By</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => setShowPaidByDrop(!showPaidByDrop)}
-          >
-            <Text style={styles.dropdownText}>{paidByLabel}</Text>
-            <Text style={styles.chevron}>⌄</Text>
-          </TouchableOpacity>
-          {showPaidByDrop && (
-            <View style={styles.dropdownMenu}>
-              {memberOptions.map((member) => (
-                <TouchableOpacity
-                  key={member.id}
-                  style={styles.dropdownItem}
-                  onPress={() => { setPaidById(member.id); setShowPaidByDrop(false); }}
-                >
-                  <Text style={styles.dropdownText}>{member.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Split Options */}
-          <Text style={styles.label}>Split Options</Text>
-          <View style={styles.splitToggleRow}>
+          {step === 1 ? (
             <TouchableOpacity
-              style={[styles.splitToggle, splitOption === 'equally' && styles.splitToggleActive]}
-              onPress={() => setSplitOption('equally')}
+              style={[styles.button, !canGoNext && styles.buttonDisabled]}
+              onPress={() => setStep(2)}
+              disabled={!canGoNext}
             >
-              <Text style={[styles.splitToggleText, splitOption === 'equally' && styles.splitToggleTextActive]}>
-                Split Equally
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.splitToggle, splitOption === 'manually' && styles.splitToggleActive]}
-              onPress={() => setSplitOption('manually')}
-            >
-              <Text style={[styles.splitToggleText, splitOption === 'manually' && styles.splitToggleTextActive]}>
-                Split Manually
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Submit Button */}
-          {splitOption === 'equally' ? (
-            <TouchableOpacity
-              style={[styles.button, submitLoading && styles.buttonDisabled]}
-              onPress={handleAddExpenseEqual}
-              disabled={submitLoading}
-            >
-              {submitLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  Add Expense{perPerson ? `  ·  $${perPerson} each` : ''}
-                </Text>
-              )}
+              <Text style={styles.buttonText}>Next</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={[
-                styles.continueButton,
-                (continuePressed || submitLoading) && { backgroundColor: '#3b5e4f' },
-                submitLoading && styles.buttonDisabled,
-              ]}
-              onPressIn={() => setContinuePressed(true)}
-              onPressOut={() => setContinuePressed(false)}
-              onPress={handleContinueManual}
-              disabled={submitLoading}
-            >
-              {submitLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
+            <>
+              {/* Split Options */}
+              <Text style={styles.label}>Split Options</Text>
+              <View style={styles.splitToggleRow}>
+                <TouchableOpacity
+                  style={[styles.splitToggle, splitOption === 'equally' && styles.splitToggleActive]}
+                  onPress={() => setSplitOption('equally')}
+                >
+                  <Text style={[styles.splitToggleText, splitOption === 'equally' && styles.splitToggleTextActive]}>
+                    Split Equally
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.splitToggle, splitOption === 'manually' && styles.splitToggleActive]}
+                  onPress={() => setSplitOption('manually')}
+                >
+                  <Text style={[styles.splitToggleText, splitOption === 'manually' && styles.splitToggleTextActive]}>
+                    Split Manually
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Submit Button */}
+              {splitOption === 'equally' ? (
+                <TouchableOpacity
+                  style={[styles.button, submitLoading && styles.buttonDisabled]}
+                  onPress={handleAddExpenseEqual}
+                  disabled={submitLoading}
+                >
+                  {submitLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.buttonText}>
+                      Add Expense{perPerson ? `  ·  $${perPerson} each` : ''}
+                    </Text>
+                  )}
+                </TouchableOpacity>
               ) : (
-                <Text style={styles.buttonText}>Continue</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.continueButton,
+                    (continuePressed || submitLoading) && { backgroundColor: '#3b5e4f' },
+                    submitLoading && styles.buttonDisabled,
+                  ]}
+                  onPressIn={() => setContinuePressed(true)}
+                  onPressOut={() => setContinuePressed(false)}
+                  onPress={handleContinueManual}
+                  disabled={submitLoading}
+                >
+                  {submitLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.buttonText}>Continue</Text>
+                  )}
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </>
           )}
         </View>
       </ScrollView>
@@ -373,6 +425,12 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontFamily: 'serif',
     fontWeight: '600',
+  },
+  headerStep: {
+    color: '#a8c4b8',
+    fontFamily: 'monospace',
+    fontSize: 13,
+    marginTop: 4,
   },
 
   // Form
@@ -432,11 +490,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
   },
+  dropdownSection: {
+    zIndex: 1000,
+    elevation: 10,
+  },
+  dropdownMenuRaised: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    marginTop: 4,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#eee',
+    zIndex: 1001,
+    elevation: 11,
+  },
+  dropdownEmpty: {
+    fontFamily: 'monospace',
+    fontSize: 14,
+    color: '#888',
+    padding: 14,
+    textAlign: 'center',
+  },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     padding: 14,
+    minHeight: 44,
+    justifyContent: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -456,8 +537,9 @@ const styles = StyleSheet.create({
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
+    padding: 12,
     gap: 12,
+    minHeight: 48,
     backgroundColor: '#f8f8f8',
     borderRadius: 10,
   },
