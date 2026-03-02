@@ -1,5 +1,8 @@
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { Alert, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
 
 const groupData = {
   id: '1',
@@ -42,7 +45,72 @@ const groupData = {
 };
 
 export default function GroupDetailScreen() {
-  return (
+    const [scanning, setScanning] = useState(false);
+    const handleScanReceipt = async () => {
+        Alert.alert('Scan Receipt', 'Choose an option', [
+          { text: 'Take Photo',          onPress: () => pickImage('camera')  },
+          { text: 'Choose from Library', onPress: () => pickImage('library') },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      };
+      
+      const pickImage = async (source: 'camera' | 'library') => {
+        if (source === 'camera') {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Camera permission is required.');
+            return;
+          }
+        } else {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Photo library permission is required.');
+            return;
+          }
+        }
+        const result = source === 'camera'
+          ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 })
+          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+      
+        if (result.canceled) return;
+        await sendReceiptToBackend(result.assets[0]);
+      };
+      
+      const sendReceiptToBackend = async (image: ImagePicker.ImagePickerAsset) => {
+        setScanning(true);
+        try {
+          const formData = new FormData();
+          formData.append('file', {
+            uri: image.uri,
+            type: image.mimeType || 'image/jpeg',
+            name: 'receipt.jpg',
+          } as any);
+      
+          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/expenses/scan-receipt`, {
+            method: 'POST',
+            body: formData,
+          });
+      
+          if (!response.ok) throw new Error('Failed to scan receipt');
+          const receiptData = await response.json();
+      
+          router.push({
+            pathname: '/groups/add-expense',
+            params: {
+              title:    receiptData.title              || '',
+              amount:   receiptData.total?.toString()    || '',
+              subtotal: receiptData.subtotal?.toString() || '',
+              tax:      receiptData.tax?.toString()      || '',
+              tip:      receiptData.tip?.toString()      || '',
+            },
+          });
+        } catch (error) {
+          Alert.alert('Error', 'Could not scan receipt. Please try again or enter manually.');
+        } finally {
+          setScanning(false);
+        }
+      };
+    return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.container}>
         {/* Header */}
@@ -94,12 +162,15 @@ export default function GroupDetailScreen() {
       </ScrollView>
 
       {/* FABs */}
-      <TouchableOpacity style={styles.fabCamera} onPress={() => console.log('scan receipt')}>
-        <Text style={styles.fabIcon}>📷</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.fabAdd} onPress={() => router.push('/groups/add-expense')}>
+      <TouchableOpacity style={styles.fabCamera} onPress={handleScanReceipt} disabled={scanning}>
+        {scanning
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.fabIcon}>📷</Text>
+        }
+    </TouchableOpacity>
+    <TouchableOpacity style={styles.fabAdd} onPress={() => router.push('/groups/add-expense')}>
         <Text style={styles.fabPlusIcon}>+</Text>
-      </TouchableOpacity>
+    </TouchableOpacity>
     </View>
   );
 }
