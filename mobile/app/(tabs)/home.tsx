@@ -33,10 +33,15 @@ export default function HomeScreen() {
           </Text>
         </View>
       </View>
-
-      {/* Friends Section */}
-      <Text style={styles.sectionTitle}>Friends</Text>
-
+<View style={styles.sectionRow}>
+  <Text style={styles.sectionTitle}>Friends</Text>
+  <TouchableOpacity
+    style={styles.addFriendsButton}
+    onPress={() => router.push('/friends')}
+  >
+    <Text style={styles.addFriendsText}>+ Add Friends</Text>
+  </TouchableOpacity>
+</View>
       <View style={styles.friendsList}>
         {friends.map((friend) => (
           <TouchableOpacity
@@ -104,7 +109,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontFamily: 'monospace',
   },
-
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginLeft: 20,
+    marginRight: 20,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  addFriendsButton: {
+    backgroundColor: '#e8a0a0',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  addFriendsText: {
+    color: '#fff',
+    fontFamily: 'monospace',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   // Balance
   balanceCard: {
     backgroundColor: '#fff',
