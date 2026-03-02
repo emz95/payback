@@ -19,6 +19,7 @@ from routers import health
 from routers import groups
 from routers import expenses
 from routers import profiles
+from routers import receipts
 
 app = FastAPI()
 
@@ -34,3 +35,4 @@ app.include_router(health.router)
 app.include_router(groups.router)
 app.include_router(expenses.router)
 app.include_router(profiles.router)
+app.include_router(receipts.router)

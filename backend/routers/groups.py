@@ -64,14 +64,16 @@ def get_total_balance(user_id: UUID = Depends(get_user_id)):
             .execute()
         ).data or []
         for exp in expenses:
-            amount_cents = exp["amount_cents"]
-            paid_by = exp["paid_by"]
             shares = (
                 supabase.table("expense_shares")
                 .select("user_id, share_cents")
                 .eq("expense_id", exp["id"])
                 .execute()
             ).data or []
+            if not shares:
+                continue
+            amount_cents = exp["amount_cents"]
+            paid_by = exp["paid_by"]
             my_share = next((s["share_cents"] for s in shares if s["user_id"] == me), 0)
             if paid_by == me:
                 total_cents += amount_cents - my_share
@@ -139,6 +141,8 @@ def get_balances_by_following(user_id: UUID = Depends(get_user_id)):
                     .eq("expense_id", exp["id"])
                     .execute()
                 ).data or []
+                if not shares:
+                    continue
                 my_share = next((s["share_cents"] for s in shares if s["user_id"] == me), 0)
                 other_share = next((s["share_cents"] for s in shares if s["user_id"] == other_id), 0)
                 if exp["paid_by"] == me:
@@ -187,15 +191,28 @@ def get_group_balance(
     user_id: UUID = Depends(get_user_id),
 ):
     """Current user's balance for this group in cents. Positive = you are owed, negative = you owe."""
-    member_rows = (
-        supabase.table("group_members")
-        .select("user_id")
-        .eq("group_id", str(group_id))
+    group_result = (
+        supabase.table("groups")
+        .select("id, created_by")
+        .eq("id", str(group_id))
         .execute()
     )
-    member_ids = [r["user_id"] for r in (member_rows.data or [])]
-    if str(user_id) not in member_ids:
+    if not group_result.data:
         raise HTTPException(status_code=404, detail="Group not found")
+    group = group_result.data[0]
+    me = str(user_id)
+    if group["created_by"] == me:
+        pass
+    else:
+        member_rows = (
+            supabase.table("group_members")
+            .select("user_id")
+            .eq("group_id", str(group_id))
+            .execute()
+        )
+        member_ids = [r["user_id"] for r in (member_rows.data or [])]
+        if me not in member_ids:
+            raise HTTPException(status_code=404, detail="Group not found")
 
     expenses = (
         supabase.table("expenses")
@@ -207,14 +224,16 @@ def get_group_balance(
     balance_cents = 0
     me = str(user_id)
     for exp in expenses:
-        amount_cents = exp["amount_cents"]
-        paid_by = exp["paid_by"]
         shares = (
             supabase.table("expense_shares")
             .select("user_id, share_cents")
             .eq("expense_id", exp["id"])
             .execute()
         ).data or []
+        if not shares:
+            continue
+        amount_cents = exp["amount_cents"]
+        paid_by = exp["paid_by"]
         my_share = next((s["share_cents"] for s in shares if s["user_id"] == me), 0)
         if paid_by == me:
             balance_cents += amount_cents - my_share

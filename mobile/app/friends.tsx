@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { router } from 'expo-router';
 
+import { getProfileIconSourceForUserId } from '@/constants/profile-icon';
+import { Fonts } from '@/constants/theme';
 import { getProfiles, getFollowing, followUser, type ApiProfile } from '@/lib/api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 
-function avatarLetter(username: string): string {
-  return (username[0] ?? '?').toUpperCase();
-}
-
 export default function FriendsScreen() {
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [allProfiles, setAllProfiles] = useState<ApiProfile[]>([]);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
@@ -60,7 +60,7 @@ export default function FriendsScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 8 }]}>
         {/* Header */}
         <View style={styles.headerCard}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -99,9 +99,10 @@ export default function FriendsScreen() {
             {filtered.map((friend) => (
               <View key={friend.id} style={styles.friendRow}>
                 <View style={styles.friendLeft}>
-                  <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarEmoji}>{avatarLetter(friend.username)}</Text>
-                  </View>
+                  <Image
+                    source={getProfileIconSourceForUserId(friend.id)}
+                    style={styles.avatarImage}
+                  />
                   <Text style={styles.username}>{friend.username}</Text>
                 </View>
                 <TouchableOpacity
@@ -165,13 +166,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
     fontSize: 26,
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontWeight: '600',
     marginBottom: 4,
   },
   headerSubtitle: {
     color: '#a8c4b8',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
   },
 
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     padding: 14,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#333',
   },
@@ -203,7 +204,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     textAlign: 'center',
   },
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     color: '#1a1a1a',
     marginLeft: 20,
     marginBottom: 12,
@@ -243,11 +244,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   avatarEmoji: {
     fontSize: 20,
   },
   username: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     color: '#1a1a1a',
   },
@@ -262,7 +268,7 @@ const styles = StyleSheet.create({
   },
   followButtonText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -277,13 +283,13 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
   emptyTitle: {
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a1a1a',
   },
   emptySubtitle: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#888',
   },

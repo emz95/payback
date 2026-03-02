@@ -1,31 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, Switch, Image
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const miso1 = require('../../assets/images/miso1.png');
-const miso2 = require('../../assets/images/miso2.png');
-const wario = require('../../assets/images/wario.png');
-
-const ICONS = [
-  { id: 'miso1', source: miso1, label: 'Miso 1' },
-  { id: 'miso2', source: miso2, label: 'Miso 2' },
-  { id: 'wario', source: wario, label: 'Miso 3'  },
-];
+import {
+  PROFILE_ICONS,
+  getStoredProfileIconId,
+  setStoredProfileIconId,
+  type ProfileIconId,
+} from '@/constants/profile-icon';
+import { Fonts } from '@/constants/theme';
 
 export default function SettingsScreen() {
   const [username, setUsername]           = useState('cooluser123');
   const [email, setEmail]                 = useState('your@email.com');
   const [venmo, setVenmo]                 = useState('');
   const [zelle, setZelle]                 = useState('');
-  const [selectedIcon, setSelectedIcon]   = useState('miso1');
+  const [selectedIcon, setSelectedIcon]   = useState<ProfileIconId>('miso1');
+
+  useEffect(() => {
+    getStoredProfileIconId().then(setSelectedIcon);
+  }, []);
+
+  const handleSelectIcon = (id: ProfileIconId) => {
+    setSelectedIcon(id);
+    setStoredProfileIconId(id);
+  };
   const [pushNotifs, setPushNotifs]       = useState(true);
   const [emailNotifs, setEmailNotifs]     = useState(true);
+  const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.container, { paddingTop: insets.top + 8 }]}
+    >
       {/* Header */}
       <View style={styles.headerCard}>
         <Text style={styles.headerTitle}>Settings</Text>
@@ -38,11 +50,11 @@ export default function SettingsScreen() {
         {/* Icon Selector */}
         <Text style={styles.label}>Profile Icon</Text>
         <View style={styles.iconRow}>
-          {ICONS.map((icon) => (
+          {PROFILE_ICONS.map((icon) => (
             <TouchableOpacity
               key={icon.id}
               style={[styles.iconButton, selectedIcon === icon.id && styles.iconButtonSelected]}
-              onPress={() => setSelectedIcon(icon.id)}
+              onPress={() => handleSelectIcon(icon.id)}
             >
               <Image source={icon.source} style={styles.iconImage} />
               {selectedIcon === icon.id && (
@@ -168,7 +180,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
     fontSize: 26,
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontWeight: '600',
   },
 
@@ -183,12 +195,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     color: '#1a1a1a',
     marginBottom: 16,
   },
   label: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontWeight: 'bold',
     fontSize: 13,
     color: '#1a1a1a',
@@ -199,7 +211,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderRadius: 14,
     padding: 14,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#333',
   },
@@ -245,7 +257,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   iconLabel: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 11,
     color: '#888',
   },
@@ -260,13 +272,13 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   switchLabel: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#1a1a1a',
     marginBottom: 2,
   },
   switchSubtitle: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 11,
     color: '#aaa',
   },
@@ -282,7 +294,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -297,7 +309,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bobaButtonText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     color: '#fff',
   },
@@ -310,7 +322,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
   logoutButtonText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     color: '#888',
   },

@@ -5,7 +5,9 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
+import { Fonts } from '@/constants/theme';
 import { getGroup, getGroupMembers, createExpense, splitExpenseEqual } from '@/lib/api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 
 const CATEGORIES = [
@@ -51,6 +53,7 @@ export default function AddExpenseScreen() {
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!groupId) {
@@ -154,7 +157,7 @@ export default function AddExpenseScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered]}>
+      <View style={[styles.screen, styles.centered, { paddingTop: insets.top + 8 }]}>
         <ActivityIndicator size="large" color="#3b5e4f" />
       </View>
     );
@@ -169,7 +172,7 @@ export default function AddExpenseScreen() {
 
   if (error && !groupId) {
     return (
-      <View style={[styles.screen, styles.centered]}>
+      <View style={[styles.screen, styles.centered, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
           <Text style={styles.backLinkText}>← Back</Text>
@@ -180,7 +183,7 @@ export default function AddExpenseScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 8 }]}>
         {/* Header */}
         <View style={styles.headerCard}>
           <TouchableOpacity
@@ -404,14 +407,14 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
   errorText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     textAlign: 'center',
   },
   backLink: { marginTop: 12 },
-  backLinkText: { fontFamily: 'monospace', color: '#3b5e4f', fontSize: 16 },
+  backLinkText: { fontFamily: Fonts.mono, color: '#3b5e4f', fontSize: 16 },
   formError: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     marginHorizontal: 16,
     marginBottom: 8,
@@ -435,12 +438,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
     fontSize: 26,
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontWeight: '600',
   },
   headerStep: {
     color: '#a8c4b8',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     marginTop: 4,
   },
@@ -452,7 +455,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#1a1a1a',
     marginTop: 12,
@@ -462,7 +465,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderRadius: 14,
     padding: 14,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#333',
   },
@@ -486,7 +489,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dropdownText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#333',
   },
@@ -517,7 +520,7 @@ const styles = StyleSheet.create({
     elevation: 11,
   },
   dropdownEmpty: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#888',
     padding: 14,
@@ -574,12 +577,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   checkboxLabel: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#1a1a1a',
   },
   selectedCount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     color: '#888',
     paddingLeft: 10,
@@ -602,7 +605,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#3b5e4f',
   },
   splitToggleText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#888',
   },
@@ -622,7 +625,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 15,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
   },
   continueButton: {
     backgroundColor: '#e8a0a0',

@@ -7,3 +7,4 @@ SUPABASE_JWKS_URL = (
     if SUPABASE_URL
     else None
 )
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")

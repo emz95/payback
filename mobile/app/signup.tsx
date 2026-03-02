@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 
+import { Fonts } from '@/constants/theme';
 import { signUpWithUsername } from '@/lib/auth';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PROFILE_ICONS = ['🐱', '🐰', '🐶', '🐦', '🐟', '🐿️'];
 
@@ -14,6 +16,7 @@ export default function SignupScreen() {
   const [selectedIcon, setSelectedIcon] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   async function handleSignup() {
     setError('');
@@ -63,7 +66,7 @@ export default function SignupScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 24 }]}>
       <Text style={styles.title}>Create Account</Text>
       <Text style={styles.subtitle}>Join Payback today!</Text>
 
@@ -168,13 +171,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     color: '#aaa',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     marginBottom: 36,
   },
   form: {
@@ -182,7 +185,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     marginBottom: 6,
     fontSize: 15,
   },
@@ -191,13 +194,13 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     padding: 16,
     marginBottom: 16,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#333',
   },
   errorText: {
     color: '#c62828',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     marginBottom: 12,
     fontSize: 14,
   },
@@ -252,7 +255,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
   },
   loginRow: {
     flexDirection: 'row',
@@ -261,11 +264,11 @@ const styles = StyleSheet.create({
   },
   loginText: {
     textAlign: 'center',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#333',
   },
   loginLink: {
     color: '#e8a0a0',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
   },
 });

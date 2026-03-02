@@ -4,7 +4,9 @@ import {
   StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Fonts } from '@/constants/theme';
 import { getGroups, getFollowing, createGroup, type ApiGroup, type ApiProfile } from '@/lib/api';
 
 /** Parse mm/dd/yyyy or similar to YYYY-MM-DD for the API. */
@@ -31,6 +33,7 @@ function formatDateRange(start: string, end: string): string {
 }
 
 export default function GroupsScreen() {
+  const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -133,7 +136,7 @@ export default function GroupsScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerCard}>
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Groups & Trips</Text>
@@ -349,7 +352,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
     fontSize: 26,
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontWeight: '600',
   },
   addFriendsButton: {
@@ -360,7 +363,7 @@ const styles = StyleSheet.create({
   },
   addFriendsText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -370,7 +373,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     textAlign: 'center',
   },
@@ -396,16 +399,16 @@ const styles = StyleSheet.create({
   groupName: {
     fontSize: 17,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     color: '#1a1a1a',
   },
   groupDate: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     color: '#888',
   },
   groupAmount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -435,7 +438,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   memberCount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     color: '#888',
     marginLeft: 4,
@@ -490,7 +493,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     color: '#1a1a1a',
   },
   closeButton: {
@@ -498,7 +501,7 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   label: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontWeight: 'bold',
     fontSize: 13,
     color: '#1a1a1a',
@@ -509,7 +512,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderRadius: 14,
     padding: 14,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#333',
   },
@@ -529,7 +532,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   dateText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#333',
     flex: 1,
@@ -554,12 +557,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   searchResultText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#1a1a1a',
   },
   searchResultAdd: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#3b5e4f',
     fontWeight: '600',
@@ -578,11 +581,11 @@ const styles = StyleSheet.create({
   },
   selectedChipText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
   },
   selectedCount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     color: '#888',
     marginTop: 8,
@@ -601,7 +604,7 @@ const styles = StyleSheet.create({
   },
   createButtonText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     fontWeight: '600',
   },

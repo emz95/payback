@@ -275,6 +275,11 @@ export type ApiProfile = {
   created_at?: string;
 };
 
+export type ApiProfileUpdate = {
+  venmo?: string | null;
+  zelle?: string | null;
+};
+
 export async function getFollowing(): Promise<ApiProfile[]> {
   const res = await fetchWithAuth('/profiles/me/following');
   if (!res.ok) {
@@ -334,6 +339,36 @@ export async function followUser(userId: string): Promise<void> {
   }
 }
 
+/** Receipt parse response from POST /receipts/parse */
+export type ApiReceiptItem = { description: string; amount_cents: number };
+export type ApiReceiptParseResponse = {
+  items: ApiReceiptItem[];
+  total_cents: number;
+  total: number;
+};
+
+export async function parseReceipt(
+  imageBase64: string,
+  groupId?: string
+): Promise<ApiReceiptParseResponse> {
+  const body: { image_base64: string; group_id?: string } = { image_base64: imageBase64 };
+  if (groupId) body.group_id = groupId;
+  const res = await fetchWithAuth('/receipts/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = `Parse receipt failed: ${res.status}`;
+    try {
+      const b = await res.json();
+      if (b?.detail) msg += ` — ${b.detail}`;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export async function createGroup(group: ApiGroupCreate): Promise<ApiGroup> {
   const { data: { session } } = await supabase.auth.getSession();
   const userId = session?.user?.id;
@@ -360,3 +395,20 @@ export async function createGroup(group: ApiGroupCreate): Promise<ApiGroup> {
   return res.json();
 }
 
+
+export async function updateProfile(profile: ApiProfileUpdate): Promise<ApiProfile> {
+  const res = await fetchWithAuth('/profiles/me', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile),
+  });
+  if (!res.ok) {
+    let msg = `Update profile failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) msg += ` — ${body.detail}`;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}

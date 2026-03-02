@@ -1,22 +1,23 @@
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { getProfileIconSource, getProfileIconSourceForUserId, getStoredProfileIconId } from '@/constants/profile-icon';
+import { Fonts } from '@/constants/theme';
 import { getFollowing, getFollowingBalances, getProfile, getTotalBalance, type ApiProfile } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
-function avatarLetter(username: string): string {
-  return (username[0] ?? '?').toUpperCase();
-}
-
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const [friends, setFriends] = useState<ApiProfile[]>([]);
   const [myName, setMyName] = useState<string>('');
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [friendBalances, setFriendBalances] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [profileIconId, setProfileIconId] = useState<string | null>(null);
 
   const loadFriends = useCallback(async () => {
     setLoading(true);
@@ -53,15 +54,26 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadFriends();
+      getStoredProfileIconId().then(setProfileIconId);
     }, [loadFriends])
   );
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.container, { paddingTop: insets.top + 8 }]}
+    >
       {/* Header Card */}
       <View style={styles.headerCard}>
         <View style={styles.headerTop}>
-          <Text style={styles.headerIcon}>🐱</Text>
+          {profileIconId && getProfileIconSource(profileIconId) ? (
+            <Image
+              source={getProfileIconSource(profileIconId)!}
+              style={styles.headerIconImage}
+            />
+          ) : (
+            <Text style={styles.headerIcon}>🐱</Text>
+          )}
           <View>
             <Text style={styles.welcomeText}>Welcome back,</Text>
             <Text style={styles.usernameText}>{myName || '…'}</Text>
@@ -131,9 +143,10 @@ export default function HomeScreen() {
                 style={styles.friendCard}
               >
                 <View style={styles.friendLeft}>
-                  <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarEmoji}>{avatarLetter(friend.username)}</Text>
-                  </View>
+                  <Image
+                    source={getProfileIconSourceForUserId(friend.id)}
+                    style={styles.avatarImage}
+                  />
                   <View>
                     <Text style={styles.friendName}>{friend.username}</Text>
                     <Text style={styles.friendSubtitle}>friend</Text>
@@ -185,16 +198,21 @@ const styles = StyleSheet.create({
   headerIcon: {
     fontSize: 36,
   },
+  headerIconImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   welcomeText: {
     color: '#fff',
     fontSize: 18,
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
   },
   usernameText: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
   },
   centered: {
     padding: 24,
@@ -202,12 +220,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     textAlign: 'center',
   },
   emptyText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#888',
     textAlign: 'center',
   },
@@ -228,7 +246,7 @@ const styles = StyleSheet.create({
   },
   addFriendsText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -239,13 +257,13 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   balanceLabel: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#888',
     marginBottom: 6,
   },
   balanceAmount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 4,
@@ -258,7 +276,7 @@ const styles = StyleSheet.create({
     color: '#c62828',
   },
   balanceSubtitle: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#888',
   },
@@ -267,7 +285,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     color: '#2c3e50',
     marginLeft: 20,
     marginBottom: 12,
@@ -298,17 +316,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
   avatarEmoji: {
     fontSize: 22,
   },
   friendName: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     color: '#222',
     marginBottom: 2,
   },
   friendSubtitle: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     color: '#aaa',
   },
@@ -318,13 +341,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   friendBalance: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     fontWeight: '600',
     color: '#555',
   },
   friendAmount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 16,
     fontWeight: '600',
   },

@@ -5,6 +5,8 @@ import {
   TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Fonts } from '@/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { getGroupMembers, splitExpenseManual } from '@/lib/api';
 
@@ -36,6 +38,7 @@ export default function ManualSplitScreen() {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [viewingProportional, setViewingProportional] = useState(false);
   const [originalAmountsBeforeView, setOriginalAmountsBeforeView] = useState<Record<string, string> | null>(null);
+  const insets = useSafeAreaInsets();
 
   const totalCents = parseInt(totalCentsParam, 10) || 0;
   const TOTAL = totalCents / 100;
@@ -138,7 +141,7 @@ export default function ManualSplitScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered]}>
+      <View style={[styles.screen, styles.centered, { paddingTop: insets.top + 8 }]}>
         <ActivityIndicator size="large" color="#3b5e4f" />
       </View>
     );
@@ -146,7 +149,7 @@ export default function ManualSplitScreen() {
 
   if (error && members.length === 0) {
     return (
-      <View style={[styles.screen, styles.centered]}>
+      <View style={[styles.screen, styles.centered, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
           <Text style={styles.backLinkText}>← Back</Text>
@@ -157,7 +160,7 @@ export default function ManualSplitScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={[styles.screen, { paddingTop: insets.top + 8 }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.headerCard}>
@@ -254,14 +257,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     textAlign: 'center',
   },
   backLink: { marginTop: 12 },
-  backLinkText: { fontFamily: 'monospace', color: '#3b5e4f', fontSize: 16 },
+  backLinkText: { fontFamily: Fonts.mono, color: '#3b5e4f', fontSize: 16 },
   formError: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     marginBottom: 8,
   },
@@ -283,13 +286,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
     fontSize: 26,
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontWeight: '600',
     marginBottom: 4,
   },
   headerSubtitle: {
     color: '#a8c4b8',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
   },
 
@@ -327,7 +330,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   memberName: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     color: '#1a1a1a',
   },
@@ -344,20 +347,20 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   dollarSign: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#888',
     marginRight: 2,
   },
   amountInput: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     color: '#1a1a1a',
     minWidth: 70,
     textAlign: 'right',
   },
   percentBadge: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 11,
     color: '#aaa',
   },
@@ -371,7 +374,7 @@ const styles = StyleSheet.create({
   },
   proportionalButtonText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -399,23 +402,23 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   summaryLabel: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#888',
   },
   summaryValue: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#888',
   },
   summaryLabelBold: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     fontWeight: 'bold',
     color: '#1a1a1a',
   },
   summaryValueBold: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     fontWeight: 'bold',
     color: '#1a1a1a',
@@ -432,7 +435,7 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     color: '#fff',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 15,
     fontWeight: '600',
   },

@@ -4,7 +4,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
-import { getGroup, getExpensesForGroup, getGroupBalance, type ApiGroup, type ApiExpense } from '@/lib/api';
+import { Fonts } from '@/constants/theme';
+import { getGroup, getExpensesForGroup, getGroupBalance, parseReceipt, type ApiGroup, type ApiExpense } from '@/lib/api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function formatDateRange(start: string, end: string): string {
   try {
@@ -25,6 +27,8 @@ export default function GroupDetailScreen() {
   const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [parseLoading, setParseLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -88,18 +92,52 @@ export default function GroupDetailScreen() {
     }
     const result =
       source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-    if (result.canceled) return;
-    // Receipt image captured; not sent to backend yet. Go to add-expense to enter manually.
-    if (id) {
-      router.push({ pathname: '/groups/add-expense', params: { group_id: id } });
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+            base64: true,
+          });
+    if (result.canceled || !result.assets[0]) return;
+    const base64 = result.assets[0].base64;
+    if (!base64 || !id) {
+      if (id) router.push({ pathname: '/groups/add-expense', params: { group_id: id } });
+      return;
+    }
+    setParseLoading(true);
+    try {
+      const parsed = await parseReceipt(base64, id);
+      const itemsJson = encodeURIComponent(JSON.stringify(parsed.items));
+      router.push({
+        pathname: '/groups/receipt-assign',
+        params: {
+          group_id: id,
+          items_json: itemsJson,
+          total_cents: String(parsed.total_cents),
+          total: String(parsed.total),
+        },
+      });
+    } catch (e) {
+      Alert.alert(
+        'Parse failed',
+        e instanceof Error ? e.message : 'Could not read receipt. Add expense manually?',
+        [
+          { text: 'OK' },
+          { text: 'Add manually', onPress: () => router.push({ pathname: '/groups/add-expense', params: { group_id: id } }) },
+        ]
+      );
+    } finally {
+      setParseLoading(false);
     }
   };
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered]}>
+      <View style={[styles.screen, styles.centered, { paddingTop: insets.top + 8 }]}>
         <ActivityIndicator size="large" color="#3b5e4f" />
       </View>
     );
@@ -107,7 +145,7 @@ export default function GroupDetailScreen() {
 
   if (error || !group) {
     return (
-      <View style={[styles.screen, styles.centered]}>
+      <View style={[styles.screen, styles.centered, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.errorText}>{error ?? 'Group not found'}</Text>
         <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
           <Text style={styles.backLinkText}>← Back</Text>
@@ -129,7 +167,13 @@ export default function GroupDetailScreen() {
   const balanceNegative = balanceCents != null && balanceCents < 0;
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+      {parseLoading ? (
+        <View style={styles.parseOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.parseOverlayText}>Reading receipt…</Text>
+        </View>
+      ) : null}
       <ScrollView contentContainerStyle={styles.container}>
         {/* Header */}
         <View style={styles.headerCard}>
@@ -209,6 +253,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f0efeb',
   },
+  parseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(59, 94, 79, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  parseOverlayText: {
+    marginTop: 12,
+    fontFamily: Fonts.mono,
+    fontSize: 14,
+    color: '#fff',
+  },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -217,12 +274,12 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   errorText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#c62828',
     textAlign: 'center',
   },
   backLink: { marginTop: 12 },
-  backLinkText: { fontFamily: 'monospace', color: '#3b5e4f', fontSize: 16 },
+  backLinkText: { fontFamily: Fonts.mono, color: '#3b5e4f', fontSize: 16 },
 
   // Header
   headerCard: {
@@ -241,13 +298,13 @@ const styles = StyleSheet.create({
   groupName: {
     color: '#fff',
     fontSize: 26,
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontWeight: '600',
     marginBottom: 4,
   },
   groupDate: {
     color: '#a8c4b8',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     marginBottom: 16,
   },
@@ -257,13 +314,13 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   balanceLabel: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#888',
     marginBottom: 6,
   },
   balanceAmount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 28,
     fontWeight: 'bold',
     color: '#1a1a1a',
@@ -279,7 +336,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     color: '#1a1a1a',
     marginLeft: 20,
     marginBottom: 12,
@@ -294,7 +351,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#888',
   },
   expenseCard: {
@@ -323,17 +380,17 @@ const styles = StyleSheet.create({
   },
   expenseTitle: {
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     fontSize: 16,
     color: '#1a1a1a',
   },
   expensePaidBy: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 13,
     color: '#666',
   },
   expenseDate: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 12,
     color: '#888',
   },
@@ -341,7 +398,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   expenseAmount: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 16,
     fontWeight: '600',
     color: '#1a1a1a',

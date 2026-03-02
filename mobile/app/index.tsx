@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 
+import { Fonts } from '@/constants/theme';
 import { signIn } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -11,6 +13,7 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     (async () => {
@@ -50,7 +53,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + 24 }]}>
       <Text style={styles.title}>Payback</Text>
       <Text style={styles.subtitle}>Track expenses with friends</Text>
 
@@ -112,7 +115,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
     alignItems: 'center',
-    paddingTop: 100,
+    paddingTop: 24,
     paddingHorizontal: 30,
   },
   centered: {
@@ -121,7 +124,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 40,
     fontWeight: 'bold',
-    fontFamily: 'serif',
+    fontFamily: Fonts.serif,
     marginBottom: 8,
   },
   subtitle: {
@@ -134,7 +137,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     marginBottom: 6,
     fontSize: 15,
   },
@@ -143,20 +146,20 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     padding: 16,
     marginBottom: 16,
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     fontSize: 14,
     color: '#333',
   },
   errorText: {
     color: '#c62828',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     marginBottom: 12,
     fontSize: 14,
   },
   forgot: {
     color: '#e8a0a0',
     textAlign: 'center',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     marginBottom: 20,
   },
   button: {
@@ -179,11 +182,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   signupText: {
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
     color: '#333',
   },
   signupLink: {
     color: '#e8a0a0',
-    fontFamily: 'monospace',
+    fontFamily: Fonts.mono,
   },
 });
