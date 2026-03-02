@@ -1,16 +1,51 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
-const friends = [
-  { id: '1', username: 'sarah_kim',  icon: '🐰', amount: 45.50,  owesYou: true  },
-  { id: '2', username: 'mike_chen',  icon: '🐶', amount: 23.00,  owesYou: false },
-  { id: '3', username: 'emma_j',     icon: '🐦', amount: 12.75,  owesYou: true  },
-  { id: '4', username: 'alex_wu',    icon: '🐟', amount: 8.50,   owesYou: false },
-];
+import { getFollowing, getProfile, type ApiProfile } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
-const overallBalance = friends.reduce((acc, f) => acc + (f.owesYou ? f.amount : -f.amount), 0);
+function avatarLetter(username: string): string {
+  return (username[0] ?? '?').toUpperCase();
+}
 
 export default function HomeScreen() {
+  const [friends, setFriends] = useState<ApiProfile[]>([]);
+  const [myName, setMyName] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadFriends = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (userId) {
+        const [data, me] = await Promise.all([
+          getFollowing(),
+          getProfile(userId).catch(() => null),
+        ]);
+        setFriends(data);
+        setMyName(me?.username ?? '');
+      } else {
+        setFriends([]);
+        setMyName('');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load friends');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFriends();
+    }, [loadFriends])
+  );
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       {/* Header Card */}
@@ -19,56 +54,66 @@ export default function HomeScreen() {
           <Text style={styles.headerIcon}>🐱</Text>
           <View>
             <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.usernameText}>YOU</Text>
+            <Text style={styles.usernameText}>{myName || '…'}</Text>
           </View>
         </View>
 
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Overall Balance</Text>
-          <Text style={[styles.balanceAmount, overallBalance >= 0 ? styles.positive : styles.negative]}>
-            {overallBalance >= 0 ? '+' : ''}${Math.abs(overallBalance).toFixed(2)}
+          <Text style={styles.balanceLabel}>Friends</Text>
+          <Text style={styles.balanceAmount}>
+            {friends.length}
           </Text>
           <Text style={styles.balanceSubtitle}>
-            {overallBalance >= 0 ? 'You are owed' : 'You owe'}
+            people you follow
           </Text>
         </View>
       </View>
-<View style={styles.sectionRow}>
-  <Text style={styles.sectionTitle}>Friends</Text>
-  <TouchableOpacity
-    style={styles.addFriendsButton}
-    onPress={() => router.push('/friends')}
-  >
-    <Text style={styles.addFriendsText}>+ Add Friends</Text>
-  </TouchableOpacity>
-</View>
-      <View style={styles.friendsList}>
-        {friends.map((friend) => (
-          <TouchableOpacity
-            key={friend.id}
-            style={styles.friendCard}
-           // onPress={() => router.push(`/friend/${friend.id}`)} //FRIEND ID AREA NAVIGATE
-          >
-            <View style={styles.friendLeft}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarEmoji}>{friend.icon}</Text>
-              </View>
-              <View>
-                <Text style={styles.friendName}>{friend.username}</Text>
-                <Text style={styles.friendSubtitle}>
-                  {friend.owesYou ? 'owes you' : 'you owe'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.friendRight}>
-              <Text style={[styles.friendAmount, friend.owesYou ? styles.positive : styles.negative]}>
-                {friend.owesYou ? '+' : ''}${friend.amount.toFixed(2)}
-              </Text>
-              <Text style={styles.chevron}>›</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionTitle}>Friends</Text>
+        <TouchableOpacity
+          style={styles.addFriendsButton}
+          onPress={() => router.push('/friends')}
+        >
+          <Text style={styles.addFriendsText}>+ Add Friends</Text>
+        </TouchableOpacity>
       </View>
+
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#3b5e4f" />
+        </View>
+      ) : error ? (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : friends.length === 0 ? (
+        <View style={styles.centered}>
+          <Text style={styles.emptyText}>No friends yet. Tap + Add Friends to follow people.</Text>
+        </View>
+      ) : (
+        <View style={styles.friendsList}>
+          {friends.map((friend) => (
+            <TouchableOpacity
+              key={friend.id}
+              style={styles.friendCard}
+            >
+              <View style={styles.friendLeft}>
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarEmoji}>{avatarLetter(friend.username)}</Text>
+                </View>
+                <View>
+                  <Text style={styles.friendName}>{friend.username}</Text>
+                  <Text style={styles.friendSubtitle}>friend</Text>
+                </View>
+              </View>
+              <View style={styles.friendRight}>
+                <Text style={styles.chevron}>›</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -109,6 +154,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontFamily: 'monospace',
   },
+  centered: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontFamily: 'monospace',
+    color: '#888',
+    textAlign: 'center',
+  },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,6 +207,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 4,
+    color: '#1a1a1a',
   },
   balanceSubtitle: {
     fontFamily: 'monospace',

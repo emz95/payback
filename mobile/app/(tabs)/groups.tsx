@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 
-import { getGroups, createGroup, type ApiGroup } from '@/lib/api';
+import { getGroups, getFollowing, createGroup, type ApiGroup, type ApiProfile } from '@/lib/api';
 
 /** Parse mm/dd/yyyy or similar to YYYY-MM-DD for the API. */
 function toISODate(input: string): string | null {
@@ -30,8 +30,6 @@ function formatDateRange(start: string, end: string): string {
   }
 }
 
-const FRIENDS = ['sarah_kim', 'mike_chen', 'emma_j', 'alex_wu'];
-
 export default function GroupsScreen() {
   const [groups, setGroups] = useState<ApiGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,20 +40,34 @@ export default function GroupsScreen() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [friendSearch, setFriendSearch] = useState('');
-  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+  const [following, setFollowing] = useState<ApiProfile[]>([]);
+  const [followingLoaded, setFollowingLoaded] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState<ApiProfile[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const filteredFriends = FRIENDS.filter(
-    (f) =>
-      f.toLowerCase().includes(friendSearch.toLowerCase()) &&
-      !selectedFriends.includes(f)
+  const filteredFriends = following.filter(
+    (p) =>
+      p.username.toLowerCase().includes(friendSearch.toLowerCase()) &&
+      !selectedMembers.some((s) => s.id === p.id)
   );
 
-  const toggleFriend = (friend: string) => {
-    setSelectedFriends((prev) =>
-      prev.includes(friend) ? prev.filter((f) => f !== friend) : [...prev, friend]
+  const toggleFriend = (profile: ApiProfile) => {
+    setSelectedMembers((prev) =>
+      prev.some((s) => s.id === profile.id)
+        ? prev.filter((s) => s.id !== profile.id)
+        : [...prev, profile]
     );
+  };
+
+  const openModal = () => {
+    setModalVisible(true);
+    if (!followingLoaded) {
+      setFollowingLoaded(true);
+      getFollowing()
+        .then(setFollowing)
+        .catch(() => setFollowing([]));
+    }
   };
 
   const resetModal = () => {
@@ -63,7 +75,7 @@ export default function GroupsScreen() {
     setStartDate('');
     setEndDate('');
     setFriendSearch('');
-    setSelectedFriends([]);
+    setSelectedMembers([]);
     setCreateError(null);
     setModalVisible(false);
   };
@@ -91,6 +103,7 @@ export default function GroupsScreen() {
         name,
         ...(start && { start_date: start }),
         ...(end && { end_date: end }),
+        ...(selectedMembers.length > 0 && { member_ids: selectedMembers.map((m) => m.id) }),
       });
       resetModal();
       setGroups((prev) => [newGroup, ...prev]);
@@ -160,7 +173,7 @@ export default function GroupsScreen() {
       </ScrollView>
 
       {/* Floating Add Button */}
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+      <TouchableOpacity style={styles.fab} onPress={openModal}>
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
 
@@ -228,11 +241,11 @@ export default function GroupsScreen() {
                 </View>
               </View>
 
-              {/* Invite Friends */}
-              <Text style={styles.label}>Invite Friends (min 2 people)</Text>
+              {/* Invite Friends (people you follow) */}
+              <Text style={styles.label}>Invite Friends</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Search by username..."
+                placeholder="Search people you follow..."
                 placeholderTextColor="#aaa"
                 value={friendSearch}
                 onChangeText={setFriendSearch}
@@ -240,41 +253,49 @@ export default function GroupsScreen() {
               />
 
               {/* Search Results */}
-              {friendSearch.length > 0 && filteredFriends.length > 0 && (
+              {friendSearch.length > 0 && (
                 <View style={styles.searchResults}>
-                  {filteredFriends.map((friend) => (
-                    <TouchableOpacity
-                      key={friend}
-                      style={styles.searchResultRow}
-                      onPress={() => {
-                        toggleFriend(friend);
-                        setFriendSearch('');
-                      }}
-                    >
-                      <Text style={styles.searchResultText}>{friend}</Text>
-                      <Text style={styles.searchResultAdd}>+ Add</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {filteredFriends.length > 0 ? (
+                    filteredFriends.map((profile) => (
+                      <TouchableOpacity
+                        key={profile.id}
+                        style={styles.searchResultRow}
+                        onPress={() => {
+                          toggleFriend(profile);
+                          setFriendSearch('');
+                        }}
+                      >
+                        <Text style={styles.searchResultText}>{profile.username}</Text>
+                        <Text style={styles.searchResultAdd}>+ Add</Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <View style={styles.searchResultRow}>
+                      <Text style={styles.searchResultText}>
+                        {following.length === 0 ? 'Load your friends first' : 'No match'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
               {/* Selected Friends Chips */}
-              {selectedFriends.length > 0 && (
+              {selectedMembers.length > 0 && (
                 <View style={styles.selectedRow}>
-                  {selectedFriends.map((friend) => (
+                  {selectedMembers.map((profile) => (
                     <TouchableOpacity
-                      key={friend}
+                      key={profile.id}
                       style={styles.selectedChip}
-                      onPress={() => toggleFriend(friend)}
+                      onPress={() => toggleFriend(profile)}
                     >
-                      <Text style={styles.selectedChipText}>{friend} ✕</Text>
+                      <Text style={styles.selectedChipText}>{profile.username} ✕</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
 
               <Text style={styles.selectedCount}>
-                Selected: You + {selectedFriends.length} friend{selectedFriends.length !== 1 ? 's' : ''}
+                Selected: You + {selectedMembers.length} friend{selectedMembers.length !== 1 ? 's' : ''}
               </Text>
 
               {createError ? (

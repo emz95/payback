@@ -11,8 +11,12 @@ class GroupBase(BaseModel):
     created_by: UUID
 
 
-class GroupCreate(GroupBase):
-    pass
+class GroupCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    start_date: date | None = None
+    end_date: date | None = None
+    created_by: UUID
+    member_ids: list[UUID] | None = None
 
 
 class GroupUpdate(BaseModel):

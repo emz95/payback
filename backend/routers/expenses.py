@@ -10,6 +10,19 @@ from models.expense import ExpenseCreate
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
 
+@router.get("")
+def list_expenses(
+    group_id: UUID | None = None,
+    user_id: UUID = Depends(get_user_id),
+):
+    """List expenses. If group_id is set, filter by that group."""
+    q = supabase.table("expenses").select("*")
+    if group_id is not None:
+        q = q.eq("group_id", str(group_id))
+    result = q.execute()
+    return result.data or []
+
+
 class ManualSplitItem(BaseModel):
     """One user's base (subtotal) for proportional split."""
     user_id: UUID
@@ -21,7 +34,7 @@ class ManualSplitBody(BaseModel):
     items: list[ManualSplitItem] = Field(..., min_length=1)
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_expense(
     expense: ExpenseCreate,
     user_id: UUID = Depends(get_user_id),
