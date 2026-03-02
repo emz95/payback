@@ -1,47 +1,69 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { router } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 
-const groupData = {
-  id: '1',
-  name: 'Tokyo Trip 2026',
-  date: 'Mar 15 – Mar 22',
-  balance: 145.50,
-  owesYou: true,
-  expenses: [
-    {
-      id: '1',
-      title: 'Dinner at Sushi Place',
-      paidBy: 'You',
-      date: '2026-03-15',
-      amount: 85.50,
-      splitWays: 3,
-      note: 'Amazing omakase!',
-      color: '#f4a0a0',
-    },
-    {
-      id: '2',
-      title: 'Train tickets',
-      paidBy: 'sarah_kim',
-      date: '2026-03-15',
-      amount: 45.00,
-      splitWays: 3,
-      note: null,
-      color: '#a0d4b0',
-    },
-    {
-      id: '3',
-      title: 'Hotel - Night 1',
-      paidBy: 'You',
-      date: '2026-03-15',
-      amount: 180.00,
-      splitWays: 3,
-      note: null,
-      color: '#f4d080',
-    },
-  ],
-};
+import { getGroup, getExpensesForGroup, type ApiGroup, type ApiExpense } from '@/lib/api';
+
+function formatDateRange(start: string, end: string): string {
+  try {
+    const s = new Date(start);
+    const e = new Date(end);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return start;
+    return `${s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${e.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  } catch {
+    return `${start} – ${end}`;
+  }
+}
 
 export default function GroupDetailScreen() {
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = typeof params.id === 'string' ? params.id : params.id?.[0];
+  const [group, setGroup] = useState<ApiGroup | null>(null);
+  const [expenses, setExpenses] = useState<ApiExpense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [groupData, expensesData] = await Promise.all([
+          getGroup(id),
+          getExpensesForGroup(id),
+        ]);
+        setGroup(groupData);
+        setExpenses(expensesData);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load group');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color="#3b5e4f" />
+      </View>
+    );
+  }
+
+  if (error || !group) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <Text style={styles.errorText}>{error ?? 'Group not found'}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <Text style={styles.backLinkText}>← Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const dateRange = formatDateRange(group.start_date, group.end_date);
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -51,14 +73,12 @@ export default function GroupDetailScreen() {
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
 
-          <Text style={styles.groupName}>{groupData.name}</Text>
-          <Text style={styles.groupDate}>{groupData.date}</Text>
+          <Text style={styles.groupName}>{group.name}</Text>
+          <Text style={styles.groupDate}>{dateRange}</Text>
 
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Your Balance</Text>
-            <Text style={[styles.balanceAmount, groupData.owesYou ? styles.positive : styles.negative]}>
-              {groupData.owesYou ? '+' : ''}${groupData.balance.toFixed(2)}
-            </Text>
+            <Text style={styles.balanceAmount}>—</Text>
           </View>
         </View>
 
@@ -66,30 +86,33 @@ export default function GroupDetailScreen() {
         <Text style={styles.sectionTitle}>Expenses</Text>
 
         <View style={styles.expensesList}>
-          {groupData.expenses.map((expense) => (
-            <View key={expense.id} style={styles.expenseCard}>
-              <View style={styles.expenseTop}>
-                <View style={styles.expenseLeft}>
-                  <View style={[styles.dot, { backgroundColor: expense.color }]} />
-                  <View>
-                    <Text style={styles.expenseTitle}>{expense.title}</Text>
-                    <Text style={styles.expensePaidBy}>Paid by {expense.paidBy}</Text>
-                    <Text style={styles.expenseDate}>{expense.date}</Text>
+          {expenses.length === 0 ? (
+            <View style={styles.emptyExpenses}>
+              <Text style={styles.emptyText}>No expenses yet. Tap + to add one.</Text>
+            </View>
+          ) : (
+            expenses.map((expense) => (
+              <View key={expense.id} style={styles.expenseCard}>
+                <View style={styles.expenseTop}>
+                  <View style={styles.expenseLeft}>
+                    <View style={styles.dot} />
+                    <View>
+                      <Text style={styles.expenseTitle}>{expense.title}</Text>
+                      <Text style={styles.expensePaidBy}>Paid by {expense.paid_by}</Text>
+                      {expense.category && (
+                        <Text style={styles.expenseDate}>{expense.category}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.expenseRight}>
+                    <Text style={styles.expenseAmount}>
+                      ${(expense.amount_cents / 100).toFixed(2)}
+                    </Text>
                   </View>
                 </View>
-                <View style={styles.expenseRight}>
-                  <Text style={styles.expenseAmount}>${expense.amount.toFixed(2)}</Text>
-                  <Text style={styles.expenseSplit}>Split {expense.splitWays} ways</Text>
-                </View>
               </View>
-
-              {expense.note && (
-                <View style={styles.noteBox}>
-                  <Text style={styles.noteText}>{expense.note}</Text>
-                </View>
-              )}
-            </View>
-          ))}
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -97,7 +120,10 @@ export default function GroupDetailScreen() {
       <TouchableOpacity style={styles.fabCamera} onPress={() => console.log('scan receipt')}>
         <Text style={styles.fabIcon}>📷</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.fabAdd} onPress={() => router.push('/groups/add-expense')}>
+      <TouchableOpacity
+        style={styles.fabAdd}
+        onPress={() => router.push(`/groups/add-expense?group_id=${id}`)}
+      >
         <Text style={styles.fabPlusIcon}>+</Text>
       </TouchableOpacity>
     </View>
@@ -109,9 +135,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f0efeb',
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   container: {
     paddingBottom: 120,
   },
+  errorText: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    textAlign: 'center',
+  },
+  backLink: { marginTop: 12 },
+  backLinkText: { fontFamily: 'monospace', color: '#3b5e4f', fontSize: 16 },
 
   // Header
   headerCard: {
@@ -155,6 +192,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 28,
     fontWeight: 'bold',
+    color: '#1a1a1a',
   },
 
   // Expenses
@@ -170,6 +208,14 @@ const styles = StyleSheet.create({
   expensesList: {
     paddingHorizontal: 16,
     gap: 12,
+  },
+  emptyExpenses: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontFamily: 'monospace',
+    color: '#888',
   },
   expenseCard: {
     backgroundColor: '#fff',
@@ -193,82 +239,65 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     marginTop: 4,
+    backgroundColor: '#3b5e4f',
   },
   expenseTitle: {
     fontWeight: 'bold',
     fontFamily: 'serif',
-    fontSize: 15,
+    fontSize: 16,
     color: '#1a1a1a',
-    marginBottom: 2,
   },
   expensePaidBy: {
     fontFamily: 'monospace',
-    fontSize: 12,
-    color: '#888',
+    fontSize: 13,
+    color: '#666',
   },
   expenseDate: {
     fontFamily: 'monospace',
-    fontSize: 11,
-    color: '#bbb',
-    marginTop: 2,
+    fontSize: 12,
+    color: '#888',
   },
   expenseRight: {
     alignItems: 'flex-end',
   },
   expenseAmount: {
     fontFamily: 'monospace',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: '#1a1a1a',
-  },
-  expenseSplit: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    color: '#888',
-    marginTop: 2,
-  },
-  noteBox: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 10,
-  },
-  noteText: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    color: '#555',
   },
 
   // FABs
   fabCamera: {
     position: 'absolute',
     bottom: 90,
-    right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    right: 24,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f5f0e8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  fabAdd: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#3b5e4f',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  fabAdd: {
-    position: 'absolute',
-    bottom: 30,
-    right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#f4a0a0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
     elevation: 4,
   },
   fabIcon: {
@@ -279,8 +308,4 @@ const styles = StyleSheet.create({
     color: '#fff',
     lineHeight: 32,
   },
-
-  // Shared
-  positive: { color: '#3daa6e' },
-  negative: { color: '#e07070' },
 });

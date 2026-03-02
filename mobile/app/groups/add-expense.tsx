@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, ScrollView,
-  TouchableOpacity, StyleSheet
+  TouchableOpacity, StyleSheet, ActivityIndicator
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
-const GROUP_MEMBERS = ['You', 'sarah_kim', 'mike_chen'];
+import { getGroup, getGroupMembers, createExpense, splitExpenseEqual } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 const CATEGORIES = [
   { label: 'Food',          color: '#f4a0a0' },
@@ -16,28 +17,139 @@ const CATEGORIES = [
   { label: 'Other',         color: '#cccccc' },
 ];
 
+type MemberOption = { id: string; label: string };
+
 export default function AddExpenseScreen() {
-  const [title, setTitle]               = useState('');
-  const [notes, setNotes]               = useState('');
-  const [amount, setAmount]             = useState('');
+  const params = useLocalSearchParams<{ group_id?: string }>();
+  const groupId = typeof params.group_id === 'string' ? params.group_id : params.group_id?.[0];
+
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
+  const [amount, setAmount] = useState('');
   const [selectedCategory, setCategory] = useState(CATEGORIES[0]);
   const [showCategoryDrop, setShowCategoryDrop] = useState(false);
-  const [selectedMembers, setSelectedMembers]   = useState<string[]>([...GROUP_MEMBERS]);
-  const [paidBy, setPaidBy]             = useState('You');
-  const [showPaidByDrop, setShowPaidByDrop]     = useState(false);
-  const [splitOption, setSplitOption]   = useState<'equally' | 'manually'>('equally');
+  const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [paidById, setPaidById] = useState<string | null>(null);
+  const [showPaidByDrop, setShowPaidByDrop] = useState(false);
+  const [splitOption, setSplitOption] = useState<'equally' | 'manually'>('equally');
   const [continuePressed, setContinuePressed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const toggleMember = (member: string) => {
-    setSelectedMembers((prev) =>
-      prev.includes(member) ? prev.filter((m) => m !== member) : [...prev, member]
+  useEffect(() => {
+    if (!groupId) {
+      setLoading(false);
+      setError('Missing group');
+      return;
+    }
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const me = session?.user?.id ?? null;
+        setCurrentUserId(me);
+        const [group, members] = await Promise.all([
+          getGroup(groupId),
+          getGroupMembers(groupId),
+        ]);
+        const options: MemberOption[] = members.map((m) => ({
+          id: m.user_id,
+          label: m.user_id === me ? 'You' : m.username,
+        }));
+        setMemberOptions(options);
+        setSelectedMemberIds(options.map((o) => o.id));
+        setPaidById(me ?? options[0]?.id ?? null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [groupId]);
+
+  const toggleMember = (id: string) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
     );
   };
 
+  const paidByLabel = memberOptions.find((m) => m.id === paidById)?.label ?? '—';
   const perPerson =
-    selectedMembers.length > 0 && parseFloat(amount) > 0
-      ? (parseFloat(amount) / selectedMembers.length).toFixed(2)
+    selectedMemberIds.length > 0 && parseFloat(amount) > 0
+      ? (parseFloat(amount) / selectedMemberIds.length).toFixed(2)
       : null;
+
+  const handleAddExpenseEqual = async () => {
+    if (!groupId || !currentUserId || !paidById) return;
+    const amt = parseFloat(amount);
+    if (!title.trim()) { setError('Enter a title'); return; }
+    if (isNaN(amt) || amt <= 0) { setError('Enter a valid amount'); return; }
+    if (selectedMemberIds.length === 0) { setError('Select at least one person'); return; }
+    setError(null);
+    setSubmitLoading(true);
+    try {
+      const expense = await createExpense({
+        group_id: groupId,
+        title: title.trim(),
+        category: selectedCategory.label,
+        amount_cents: Math.round(amt * 100),
+        paid_by: paidById,
+        split_mode: 'equal',
+      });
+      await splitExpenseEqual(expense.id);
+      router.back();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to add expense');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleContinueManual = async () => {
+    if (!groupId || !currentUserId || !paidById) return;
+    const amt = parseFloat(amount);
+    if (!title.trim()) { setError('Enter a title'); return; }
+    if (isNaN(amt) || amt <= 0) { setError('Enter a valid amount'); return; }
+    if (selectedMemberIds.length === 0) { setError('Select at least one person'); return; }
+    setError(null);
+    setSubmitLoading(true);
+    try {
+      const expense = await createExpense({
+        group_id: groupId,
+        title: title.trim(),
+        category: selectedCategory.label,
+        amount_cents: Math.round(amt * 100),
+        paid_by: paidById,
+        split_mode: 'manual',
+      });
+      setSubmitLoading(false);
+      router.push(`/groups/manual-split?expense_id=${expense.id}&group_id=${groupId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to add expense');
+      setSubmitLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color="#3b5e4f" />
+      </View>
+    );
+  }
+
+  if (error && !groupId) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <Text style={styles.backLinkText}>← Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -49,6 +161,8 @@ export default function AddExpenseScreen() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Add Expense</Text>
         </View>
+
+        {error ? <Text style={styles.formError}>{error}</Text> : null}
 
         <View style={styles.form}>
           {/* Title */}
@@ -114,19 +228,19 @@ export default function AddExpenseScreen() {
           {/* Split Between */}
           <Text style={styles.label}>Split Between</Text>
           <View style={styles.checkboxGroup}>
-            {GROUP_MEMBERS.map((member) => (
+            {memberOptions.map((member) => (
               <TouchableOpacity
-                key={member}
+                key={member.id}
                 style={styles.checkboxRow}
-                onPress={() => toggleMember(member)}
+                onPress={() => toggleMember(member.id)}
               >
-                <View style={[styles.checkbox, selectedMembers.includes(member) && styles.checkboxChecked]}>
-                  {selectedMembers.includes(member) && <Text style={styles.checkmark}>✓</Text>}
+                <View style={[styles.checkbox, selectedMemberIds.includes(member.id) && styles.checkboxChecked]}>
+                  {selectedMemberIds.includes(member.id) && <Text style={styles.checkmark}>✓</Text>}
                 </View>
-                <Text style={styles.checkboxLabel}>{member}</Text>
+                <Text style={styles.checkboxLabel}>{member.label}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={styles.selectedCount}>Selected: {selectedMembers.length} people</Text>
+            <Text style={styles.selectedCount}>Selected: {selectedMemberIds.length} people</Text>
           </View>
 
           {/* Paid By */}
@@ -135,18 +249,18 @@ export default function AddExpenseScreen() {
             style={styles.dropdown}
             onPress={() => setShowPaidByDrop(!showPaidByDrop)}
           >
-            <Text style={styles.dropdownText}>{paidBy}</Text>
+            <Text style={styles.dropdownText}>{paidByLabel}</Text>
             <Text style={styles.chevron}>⌄</Text>
           </TouchableOpacity>
           {showPaidByDrop && (
             <View style={styles.dropdownMenu}>
-              {GROUP_MEMBERS.map((member) => (
+              {memberOptions.map((member) => (
                 <TouchableOpacity
-                  key={member}
+                  key={member.id}
                   style={styles.dropdownItem}
-                  onPress={() => { setPaidBy(member); setShowPaidByDrop(false); }}
+                  onPress={() => { setPaidById(member.id); setShowPaidByDrop(false); }}
                 >
-                  <Text style={styles.dropdownText}>{member}</Text>
+                  <Text style={styles.dropdownText}>{member.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -175,20 +289,37 @@ export default function AddExpenseScreen() {
 
           {/* Submit Button */}
           {splitOption === 'equally' ? (
-            <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-              <Text style={styles.buttonText}>
-                Add Expense{perPerson ? `  ·  $${perPerson} each` : ''}
-              </Text>
+            <TouchableOpacity
+              style={[styles.button, submitLoading && styles.buttonDisabled]}
+              onPress={handleAddExpenseEqual}
+              disabled={submitLoading}
+            >
+              {submitLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  Add Expense{perPerson ? `  ·  $${perPerson} each` : ''}
+                </Text>
+              )}
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-                style={[styles.continueButton, continuePressed && { backgroundColor: '#3b5e4f' }]}
-                onPressIn={() => setContinuePressed(true)}
-                onPressOut={() => setContinuePressed(false)}
-                onPress={() => router.push('/groups/manual-split')}
->
-  <Text style={styles.buttonText}>Continue</Text>
-</TouchableOpacity>
+              style={[
+                styles.continueButton,
+                (continuePressed || submitLoading) && { backgroundColor: '#3b5e4f' },
+                submitLoading && styles.buttonDisabled,
+              ]}
+              onPressIn={() => setContinuePressed(true)}
+              onPressOut={() => setContinuePressed(false)}
+              onPress={handleContinueManual}
+              disabled={submitLoading}
+            >
+              {submitLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.buttonText}>Continue</Text>
+              )}
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
@@ -201,9 +332,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f0efeb',
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   container: {
     paddingBottom: 60,
   },
+  errorText: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    textAlign: 'center',
+  },
+  backLink: { marginTop: 12 },
+  backLinkText: { fontFamily: 'monospace', color: '#3b5e4f', fontSize: 16 },
+  formError: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  buttonDisabled: { opacity: 0.7 },
 
   // Header
   headerCard: {

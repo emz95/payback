@@ -94,7 +94,7 @@ def get_profile(
     return result.data[0]
 
 
-@router.get("/", response_model=List[Profile])
+@router.get("", response_model=List[Profile])
 def get_profiles(current_user_id: UUID = Depends(get_user_id)):
     """List all profiles. Requires auth."""
     result = supabase.table("profiles").select("*").execute()

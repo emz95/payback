@@ -1,28 +1,61 @@
-import { useState } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 
-const SUGGESTED_FRIENDS = [
-  { id: '1', username: 'jordan_lee',    icon: '🐱' },
-  { id: '2', username: 'taylor_swift',  icon: '🐰' },
-  { id: '3', username: 'chris_evans',   icon: '🐶' },
-  { id: '4', username: 'zoe_williams',  icon: '🐦' },
-  { id: '5', username: 'maya_patel',    icon: '🐟' },
-  { id: '6', username: 'ryan_garcia',   icon: '🐿️' },
-];
+import { getProfiles, getFollowing, followUser, type ApiProfile } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+
+function avatarLetter(username: string): string {
+  return (username[0] ?? '?').toUpperCase();
+}
 
 export default function FriendsScreen() {
   const [search, setSearch] = useState('');
-  const [followed, setFollowed] = useState<string[]>([]);
+  const [allProfiles, setAllProfiles] = useState<ApiProfile[]>([]);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [followingInProgress, setFollowingInProgress] = useState<Set<string>>(new Set());
 
-  const filtered = SUGGESTED_FRIENDS.filter((f) =>
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setCurrentUserId(session?.user?.id ?? null);
+        const [profiles, following] = await Promise.all([getProfiles(), getFollowing()]);
+        setAllProfiles(profiles);
+        setFollowingIds(new Set(following.map((p) => p.id)));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const suggested = allProfiles.filter(
+    (p) => p.id !== currentUserId && !followingIds.has(p.id)
+  );
+  const filtered = suggested.filter((f) =>
     f.username.toLowerCase().includes(search.toLowerCase())
   );
 
-  const toggleFollow = (id: string) => {
-    setFollowed((prev) =>
-      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
-    );
+  const handleFollow = async (id: string) => {
+    if (followingInProgress.has(id)) return;
+    setFollowingInProgress((prev) => new Set(prev).add(id));
+    try {
+      await followUser(id);
+      setFollowingIds((prev) => new Set(prev).add(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Follow failed');
+    } finally {
+      setFollowingInProgress((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   return (
@@ -53,34 +86,54 @@ export default function FriendsScreen() {
         {/* Suggested Friends */}
         <Text style={styles.sectionTitle}>Suggested Friends</Text>
 
-        <View style={styles.list}>
-          {filtered.map((friend) => (
-            <View key={friend.id} style={styles.friendRow}>
-              <View style={styles.friendLeft}>
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarEmoji}>{friend.icon}</Text>
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#3b5e4f" />
+          </View>
+        ) : error ? (
+          <View style={styles.centered}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {filtered.map((friend) => (
+              <View key={friend.id} style={styles.friendRow}>
+                <View style={styles.friendLeft}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarEmoji}>{avatarLetter(friend.username)}</Text>
+                  </View>
+                  <Text style={styles.username}>{friend.username}</Text>
                 </View>
-                <Text style={styles.username}>{friend.username}</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.followButton,
+                    followingInProgress.has(friend.id) && styles.followButtonDisabled,
+                  ]}
+                  onPress={() => handleFollow(friend.id)}
+                  disabled={followingInProgress.has(friend.id)}
+                >
+                  {followingInProgress.has(friend.id) ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.followButtonText}>Follow</Text>
+                  )}
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[styles.followButton, followed.includes(friend.id) && styles.followButtonPending]}
-                onPress={() => toggleFollow(friend.id)}
-              >
-                <Text style={styles.followButtonText}>
-                  {followed.includes(friend.id) ? 'Pending' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ))}
+            ))}
 
-          {filtered.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🐾</Text>
-              <Text style={styles.emptyTitle}>No users found</Text>
-              <Text style={styles.emptySubtitle}>Try a different username</Text>
-            </View>
-          )}
-        </View>
+            {filtered.length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyEmoji}>🐾</Text>
+                <Text style={styles.emptyTitle}>
+                  {suggested.length === 0 ? 'No one left to follow' : 'No users found'}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {suggested.length === 0 ? "You're following everyone!" : 'Try a different username'}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -144,6 +197,16 @@ const styles = StyleSheet.create({
     color: '#333',
   },
 
+  centered: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    textAlign: 'center',
+  },
   // Section
   sectionTitle: {
     fontSize: 18,
@@ -194,8 +257,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 18,
   },
-  followButtonPending: {
-    backgroundColor: '#ccc',
+  followButtonDisabled: {
+    backgroundColor: '#999',
   },
   followButtonText: {
     color: '#fff',
