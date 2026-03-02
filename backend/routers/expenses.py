@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core.deps import get_user_id
@@ -15,12 +15,25 @@ def list_expenses(
     group_id: UUID | None = None,
     user_id: UUID = Depends(get_user_id),
 ):
-    """List expenses. If group_id is set, filter by that group."""
+    """List expenses. If group_id is set, filter by that group. Includes paid_by_username."""
     q = supabase.table("expenses").select("*")
     if group_id is not None:
         q = q.eq("group_id", str(group_id))
     result = q.execute()
-    return result.data or []
+    rows = result.data or []
+    if not rows:
+        return rows
+    payer_ids = list({r["paid_by"] for r in rows})
+    profiles = (
+        supabase.table("profiles")
+        .select("id, username")
+        .in_("id", payer_ids)
+        .execute()
+    )
+    by_id = {p["id"]: p.get("username") or "?" for p in (profiles.data or [])}
+    for r in rows:
+        r["paid_by_username"] = by_id.get(r["paid_by"]) or "?"
+    return rows
 
 
 class ManualSplitItem(BaseModel):
@@ -32,6 +45,11 @@ class ManualSplitItem(BaseModel):
 class ManualSplitBody(BaseModel):
     """List of each participant's base amount; share = (base / sum of bases) * expense total."""
     items: list[ManualSplitItem] = Field(..., min_length=1)
+
+
+class SplitEqualBody(BaseModel):
+    """Optional: split only among these user ids (must be group members). If omitted, split among all group members."""
+    user_ids: list[UUID] | None = None
 
 
 @router.post("", status_code=201)
@@ -56,6 +74,7 @@ def create_expense(
 @router.post("/{expense_id}/split-equal", status_code=201)
 def split_equal_expense(
     expense_id: UUID,
+    body: SplitEqualBody | None = Body(None),
     user_id: UUID = Depends(get_user_id),
 ):
     exp_result = (
@@ -76,12 +95,24 @@ def split_equal_expense(
         .eq("group_id", group_id)
         .execute()
     )
-    members = members_result.data or []
-    if not members:
+    all_members = members_result.data or []
+    if not all_members:
         raise HTTPException(
             status_code=400,
             detail="Group has no members; cannot split",
         )
+
+    if body and body.user_ids:
+        allowed = {m["user_id"] for m in all_members}
+        for uid in body.user_ids:
+            if str(uid) not in allowed:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"User {uid} is not a member of this group",
+                )
+        members = [{"user_id": str(uid)} for uid in body.user_ids]
+    else:
+        members = all_members
 
     n = len(members)
     base_cents, remainder = divmod(amount_cents, n)

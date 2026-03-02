@@ -113,6 +113,49 @@ export async function getGroup(groupId: string): Promise<ApiGroup> {
   return res.json();
 }
 
+export type ApiGroupBalance = { balance_cents: number };
+
+export async function getGroupBalance(groupId: string): Promise<ApiGroupBalance> {
+  const res = await fetchWithAuth(`/groups/${groupId}/balance`);
+  if (!res.ok) {
+    let msg = `Balance failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) msg += ` — ${body.detail}`;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function getTotalBalance(): Promise<ApiGroupBalance> {
+  const res = await fetchWithAuth('/groups/balance/total');
+  if (!res.ok) {
+    let msg = `Total balance failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) msg += ` — ${body.detail}`;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export type ApiFollowingBalance = { user_id: string; username: string; balance_cents: number };
+
+export async function getFollowingBalances(): Promise<ApiFollowingBalance[]> {
+  const res = await fetchWithAuth('/groups/balance/by-following');
+  if (!res.ok) {
+    let msg = `Following balances failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) msg += ` — ${body.detail}`;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export type ApiExpense = {
   id: string;
   group_id: string;
@@ -120,6 +163,7 @@ export type ApiExpense = {
   category?: string | null;
   amount_cents: number;
   paid_by: string;
+  paid_by_username?: string | null;
   split_mode?: string | null;
   created_at?: string;
 };
@@ -178,10 +222,41 @@ export async function createExpense(payload: ApiExpenseCreate): Promise<ApiExpen
   return res.json();
 }
 
-export async function splitExpenseEqual(expenseId: string): Promise<unknown> {
-  const res = await fetchWithAuth(`/expenses/${expenseId}/split-equal`, { method: 'POST' });
+/** If userIds is provided, split only among these group members; otherwise all group members. */
+export async function splitExpenseEqual(
+  expenseId: string,
+  userIds?: string[]
+): Promise<unknown> {
+  const res = await fetchWithAuth(`/expenses/${expenseId}/split-equal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: userIds != null && userIds.length > 0 ? JSON.stringify({ user_ids: userIds }) : undefined,
+  });
   if (!res.ok) {
     let msg = `Split expense failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) msg += ` — ${body.detail}`;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export type ApiManualSplitItem = { user_id: string; base_cents: number };
+
+/** Send each member's share as base_cents; backend proportions to expense total. */
+export async function splitExpenseManual(
+  expenseId: string,
+  items: ApiManualSplitItem[]
+): Promise<unknown> {
+  const res = await fetchWithAuth(`/expenses/${expenseId}/split-manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) {
+    let msg = `Manual split failed: ${res.status}`;
     try {
       const body = await res.json();
       if (body?.detail) msg += ` — ${body.detail}`;

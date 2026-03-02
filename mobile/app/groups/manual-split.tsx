@@ -1,33 +1,83 @@
-// Each member row has a dollar input and a live percentage badge that updates as you type
-// "Split Remaining $X.XX Proportionally" button appears in pink when subtotal < total and subtotal > 0 — tap it and it distributes the remainder based on each person's share
-// Bottom summary bar shows Subtotal, Remaining (yellow when partial, red if over, green when zero), and Total
-// Confirm Split button is greyed out until remaining hits exactly $0.00, then turns dark green
-import { useState } from 'react';
+// Manual split: one row per groupmate (from "Split Between"), dollar inputs, proportionally fill remainder, confirm calls backend.
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, ScrollView,
-  TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform
+  TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { supabase } from '@/lib/supabase';
+import { getGroupMembers, splitExpenseManual } from '@/lib/api';
 
-// TODO: replace with real data passed from add-expense screen
-const TOTAL = 92.00;
-const EXPENSE_NAME = 'Dinner at Sushi Place';
-const MEMBERS = [
-  { id: '1', username: 'You',       icon: '🐱' },
-  { id: '2', username: 'sarah_kim', icon: '🐰' },
-  { id: '3', username: 'mike_chen', icon: '🐶' },
-];
+type MemberRow = { id: string; username: string };
+
+function avatarLetter(username: string): string {
+  return (username[0] ?? '?').toUpperCase();
+}
 
 export default function ManualSplitScreen() {
+  const params = useLocalSearchParams<{
+    expense_id?: string;
+    group_id?: string;
+    member_ids?: string;
+    total_cents?: string;
+    title?: string;
+  }>();
+  const expenseId = typeof params.expense_id === 'string' ? params.expense_id : params.expense_id?.[0];
+  const groupId = typeof params.group_id === 'string' ? params.group_id : params.group_id?.[0];
+  const memberIdsParam = typeof params.member_ids === 'string' ? params.member_ids : params.member_ids?.[0] ?? '';
+  const totalCentsParam = typeof params.total_cents === 'string' ? params.total_cents : params.total_cents?.[0] ?? '0';
+  const titleParam = typeof params.title === 'string' ? params.title : params.title?.[0] ?? 'Expense';
+
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [viewingProportional, setViewingProportional] = useState(false);
+  const [originalAmountsBeforeView, setOriginalAmountsBeforeView] = useState<Record<string, string> | null>(null);
+
+  const totalCents = parseInt(totalCentsParam, 10) || 0;
+  const TOTAL = totalCents / 100;
+  const EXPENSE_NAME = decodeURIComponent(titleParam);
+
+  useEffect(() => {
+    if (!groupId || !memberIdsParam) {
+      setLoading(false);
+      return;
+    }
+    const ids = memberIdsParam.split(',').filter(Boolean);
+    (async () => {
+      try {
+        const [session, groupMembers] = await Promise.all([
+          supabase.auth.getSession(),
+          getGroupMembers(groupId),
+        ]);
+        const me = session.data?.session?.user?.id ?? null;
+        setCurrentUserId(me);
+        const ordered = ids
+          .map((id) => groupMembers.find((m) => m.user_id === id))
+          .filter(Boolean) as { user_id: string; username: string }[];
+        const withNames = ordered.map((m) => ({
+          id: m.user_id,
+          username: me && m.user_id === me ? 'You' : m.username,
+        }));
+        setMembers(withNames);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [groupId, memberIdsParam]);
 
   const getAmount = (id: string) => parseFloat(amounts[id] || '0') || 0;
 
   const subtotal = parseFloat(
-    MEMBERS.reduce((sum, m) => sum + getAmount(m.id), 0).toFixed(2)
+    members.reduce((sum, m) => sum + getAmount(m.id), 0).toFixed(2)
   );
   const remaining = parseFloat((TOTAL - subtotal).toFixed(2));
-  const isOver     = remaining < 0;
+  const isOver = remaining < 0;
   const isComplete = remaining === 0;
 
   const getPercent = (id: string) => {
@@ -35,25 +85,81 @@ export default function ManualSplitScreen() {
     return ((getAmount(id) / subtotal) * 100).toFixed(1) + '%';
   };
 
-  const splitProportionally = () => {
-    if (subtotal === 0) return;
-    const newAmounts = { ...amounts };
-    MEMBERS.forEach((m) => {
+  const applyProportionalSplit = useCallback(() => {
+    const newAmounts: Record<string, string> = {};
+    if (subtotal === 0 || members.length === 0) {
+      const equalEach = members.length > 0 ? TOTAL / members.length : 0;
+      members.forEach((m) => {
+        newAmounts[m.id] = parseFloat(equalEach.toFixed(2)).toString();
+      });
+      return newAmounts;
+    }
+    members.forEach((m) => {
       const share = getAmount(m.id) / subtotal;
       const newVal = parseFloat((getAmount(m.id) + share * remaining).toFixed(2));
       newAmounts[m.id] = newVal.toString();
     });
-    setAmounts(newAmounts);
+    return newAmounts;
+  }, [amounts, members, subtotal, remaining, TOTAL]);
+
+  const toggleViewSplit = useCallback(() => {
+    if (viewingProportional) {
+      if (originalAmountsBeforeView) setAmounts(originalAmountsBeforeView);
+      setOriginalAmountsBeforeView(null);
+      setViewingProportional(false);
+    } else {
+      setOriginalAmountsBeforeView({ ...amounts });
+      const proportional = applyProportionalSplit();
+      if (proportional) setAmounts(proportional);
+      setViewingProportional(true);
+    }
+  }, [viewingProportional, originalAmountsBeforeView, amounts, applyProportionalSplit]);
+
+  const handleConfirm = async () => {
+    if (!expenseId || !isComplete) return;
+    setError(null);
+    setSubmitLoading(true);
+    try {
+      const items = members.map((m) => ({
+        user_id: m.id,
+        base_cents: Math.round(getAmount(m.id) * 100),
+      }));
+      await splitExpenseManual(expenseId, items);
+      router.back();
+      router.back();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save split');
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const remainingColor = isOver ? '#e07070' : remaining > 0 ? '#e8b84b' : '#3daa6e';
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color="#3b5e4f" />
+      </View>
+    );
+  }
+
+  if (error && members.length === 0) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <Text style={styles.backLinkText}>← Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Header */}
       <View style={styles.headerCard}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backArrow}>←</Text>
@@ -65,13 +171,12 @@ export default function ManualSplitScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Member Rows */}
         <View style={styles.membersList}>
-          {MEMBERS.map((member) => (
+          {members.map((member) => (
             <View key={member.id} style={styles.memberRow}>
               <View style={styles.memberLeft}>
                 <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarEmoji}>{member.icon}</Text>
+                  <Text style={styles.avatarEmoji}>{avatarLetter(member.username)}</Text>
                 </View>
                 <Text style={styles.memberName}>{member.username}</Text>
               </View>
@@ -95,18 +200,17 @@ export default function ManualSplitScreen() {
           ))}
         </View>
 
-        {/* Split Proportionally Button */}
-        {remaining > 0 && subtotal > 0 && (
-          <TouchableOpacity style={styles.proportionalButton} onPress={splitProportionally}>
+        {members.length > 0 && (
+          <TouchableOpacity style={styles.proportionalButton} onPress={toggleViewSplit}>
             <Text style={styles.proportionalButtonText}>
-              Split Remaining ${remaining.toFixed(2)} Proportionally
+              {viewingProportional ? 'Back to amounts' : 'View Split'}
             </Text>
           </TouchableOpacity>
         )}
       </ScrollView>
 
-      {/* Bottom Summary Bar */}
       <View style={styles.summaryBar}>
+        {error ? <Text style={styles.formError}>{error}</Text> : null}
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Subtotal</Text>
           <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
@@ -123,13 +227,17 @@ export default function ManualSplitScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.confirmButton, !isComplete && styles.confirmButtonDisabled]}
-          disabled={!isComplete}
-          onPress={() => {router.back(); router.back()}}
+          style={[styles.confirmButton, (!isComplete || submitLoading) && styles.confirmButtonDisabled]}
+          disabled={!isComplete || submitLoading}
+          onPress={handleConfirm}
         >
-          <Text style={[styles.confirmButtonText, !isComplete && styles.confirmButtonTextDisabled]}>
-            Confirm Split
-          </Text>
+          {submitLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={[styles.confirmButtonText, !isComplete && styles.confirmButtonTextDisabled]}>
+              Confirm Split
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -141,8 +249,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f0efeb',
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    textAlign: 'center',
+  },
+  backLink: { marginTop: 12 },
+  backLinkText: { fontFamily: 'monospace', color: '#3b5e4f', fontSize: 16 },
+  formError: {
+    fontFamily: 'monospace',
+    color: '#c62828',
+    marginBottom: 8,
+  },
 
-  // Header
   headerCard: {
     backgroundColor: '#3b5e4f',
     borderRadius: 20,
@@ -170,7 +293,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Members
   container: {
     padding: 16,
     paddingBottom: 40,
@@ -202,6 +324,7 @@ const styles = StyleSheet.create({
   },
   avatarEmoji: {
     fontSize: 20,
+    color: '#fff',
   },
   memberName: {
     fontFamily: 'monospace',
@@ -239,7 +362,6 @@ const styles = StyleSheet.create({
     color: '#aaa',
   },
 
-  // Proportional button
   proportionalButton: {
     backgroundColor: '#e8a0a0',
     borderRadius: 25,
@@ -254,7 +376,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Summary bar
   summaryBar: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,

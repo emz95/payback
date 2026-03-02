@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { getFollowing, getProfile, type ApiProfile } from '@/lib/api';
+import { getFollowing, getFollowingBalances, getProfile, getTotalBalance, type ApiProfile } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 function avatarLetter(username: string): string {
@@ -13,6 +13,8 @@ function avatarLetter(username: string): string {
 export default function HomeScreen() {
   const [friends, setFriends] = useState<ApiProfile[]>([]);
   const [myName, setMyName] = useState<string>('');
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [friendBalances, setFriendBalances] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,15 +25,23 @@ export default function HomeScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (userId) {
-        const [data, me] = await Promise.all([
+        const [data, me, balance, followingBalances] = await Promise.all([
           getFollowing(),
           getProfile(userId).catch(() => null),
+          getTotalBalance().catch(() => ({ balance_cents: 0 })),
+          getFollowingBalances().catch(() => []),
         ]);
         setFriends(data);
         setMyName(me?.username ?? '');
+        setBalanceCents(balance.balance_cents);
+        setFriendBalances(
+          Object.fromEntries(followingBalances.map((b) => [b.user_id, b.balance_cents]))
+        );
       } else {
         setFriends([]);
         setMyName('');
+        setBalanceCents(null);
+        setFriendBalances({});
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load friends');
@@ -59,12 +69,28 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Friends</Text>
-          <Text style={styles.balanceAmount}>
-            {friends.length}
+          <Text style={styles.balanceLabel}>Overall balance</Text>
+          <Text
+            style={[
+              styles.balanceAmount,
+              balanceCents != null && balanceCents > 0 && styles.balancePositive,
+              balanceCents != null && balanceCents < 0 && styles.balanceNegative,
+            ]}
+          >
+            {balanceCents === null
+              ? '—'
+              : balanceCents === 0
+                ? '$0.00'
+                : balanceCents > 0
+                  ? `+$${(balanceCents / 100).toFixed(2)}`
+                  : `-$${(Math.abs(balanceCents) / 100).toFixed(2)}`}
           </Text>
           <Text style={styles.balanceSubtitle}>
-            people you follow
+            {balanceCents != null && balanceCents > 0
+              ? 'You are owed'
+              : balanceCents != null && balanceCents < 0
+                ? 'You owe'
+                : 'Across all groups'}
           </Text>
         </View>
       </View>
@@ -93,25 +119,41 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={styles.friendsList}>
-          {friends.map((friend) => (
-            <TouchableOpacity
-              key={friend.id}
-              style={styles.friendCard}
-            >
-              <View style={styles.friendLeft}>
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarEmoji}>{avatarLetter(friend.username)}</Text>
+          {friends.map((friend) => {
+            const cents = friendBalances[friend.id] ?? 0;
+            const balanceText =
+              cents === 0 ? 'Settled' : cents > 0 ? `+$${(cents / 100).toFixed(2)}` : `-$${(Math.abs(cents) / 100).toFixed(2)}`;
+            const balancePositive = cents > 0;
+            const balanceNegative = cents < 0;
+            return (
+              <TouchableOpacity
+                key={friend.id}
+                style={styles.friendCard}
+              >
+                <View style={styles.friendLeft}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarEmoji}>{avatarLetter(friend.username)}</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.friendName}>{friend.username}</Text>
+                    <Text style={styles.friendSubtitle}>friend</Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.friendName}>{friend.username}</Text>
-                  <Text style={styles.friendSubtitle}>friend</Text>
+                <View style={styles.friendRight}>
+                  <Text
+                    style={[
+                      styles.friendBalance,
+                      balancePositive && styles.balancePositive,
+                      balanceNegative && styles.balanceNegative,
+                    ]}
+                  >
+                    {balanceText}
+                  </Text>
+                  <Text style={styles.chevron}>›</Text>
                 </View>
-              </View>
-              <View style={styles.friendRight}>
-                <Text style={styles.chevron}>›</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
     </ScrollView>
@@ -209,6 +251,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     color: '#1a1a1a',
   },
+  balancePositive: {
+    color: '#2e7d32',
+  },
+  balanceNegative: {
+    color: '#c62828',
+  },
   balanceSubtitle: {
     fontFamily: 'monospace',
     fontSize: 13,
@@ -267,7 +315,13 @@ const styles = StyleSheet.create({
   friendRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  friendBalance: {
+    fontFamily: 'monospace',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
   },
   friendAmount: {
     fontFamily: 'monospace',
